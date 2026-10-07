@@ -12,6 +12,107 @@
 
 ---
 
+## 🎯 Panduan Cepat Memulai untuk Pemula (Quick Start)
+
+Jika Anda baru pertama kali mengunduh proyek ini, ikuti **4 langkah mudah** berikut untuk langsung menjalankannya di komputer Anda (Localhost XAMPP):
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ 1. Download /   │ ──> │ 2. Import DB    │ ──> │ 3. Setting .env │ ──> │ 4. Start Engine │
+│    Clone Repo   │     │    database.sql │     │    & npm install│     │    & Buka Web   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+### Langkah 1: Download atau Clone Proyek
+* **Cara Git**: Buka terminal/CMD, lalu jalankan:
+  ```bash
+  git clone https://github.com/csbaguosps-stack/wagtw.git
+  ```
+  *(Letakkan folder di dalam direktori `htdocs`, misal `C:\xampp\htdocs\wagtw`)*
+* **Cara Download ZIP**: Klik tombol hijau **`<> Code`** di GitHub > pilih **Download ZIP** > lalu ekstrak ke `htdocs/wagtw`.
+
+### Langkah 2: Import Database MySQL
+1. Pastikan modul **Apache** dan **MySQL** di XAMPP sudah menyala (**Start**).
+2. Buka browser, akses phpMyAdmin di: `http://localhost/phpmyadmin`
+3. Buat database baru dengan nama: `wagtw`
+4. Klik database `wagtw`, buka tab **Import**, pilih file:
+   👉 **`database.sql`** *(berada langsung di folder utama proyek)*
+5. Klik **Go / Kirim**.
+
+> 🔑 **Akun Super Administrator Bawaan**:
+> - **Username**: `admin`
+> - **Password**: `password`
+> *(Akun ini sudah otomatis dibuat oleh file `database.sql`)*
+
+### Langkah 3: Konfigurasi File `.env` & Install Node.js Modul
+1. Masuk ke folder `server`:
+   - Copy file `.env.example` lalu ubah namanya menjadi `.env`.
+   - Buka file `server/.env` dan sesuaikan koneksi database Anda (default XAMPP tanpa password):
+     ```env
+     WA_ENGINE_PORT=3001
+     API_SECRET_TOKEN=wagtw_secret_token_2024
+
+     DB_HOST=localhost
+     DB_USER=root
+     DB_PASS=""
+     DB_NAME=wagtw
+     ```
+2. Pastikan komputer Anda sudah terpasang **Node.js** (download di [nodejs.org](https://nodejs.org) jika belum punya).
+3. Buka Terminal / CMD di dalam folder `server`, lalu jalankan:
+   ```cmd
+   cd server
+   npm install
+   ```
+   *(Tunggu beberapa saat sampai modul Baileys & Express selesai diunduh).*
+
+### Langkah 4: Jalankan Engine & Buka Web
+1. **Nyalakan WhatsApp Engine**:
+   - Buka folder `server`, cukup **klik dua kali** file:
+     👉 **`start_engine.bat`** (atau ketik `node server.js` di terminal).
+   - Biarkan jendela CMD tersebut tetap terbuka selama sistem digunakan.
+2. **Buka Web Dashboard**:
+   - Buka browser dan buka alamat:
+     ```
+     http://localhost/wagtw/public
+     ```
+   - Login dengan: `admin` / `password`.
+3. **Hubungkan WhatsApp**:
+   - Buka menu **Devices** > Klik **+ Tambah Device** > Klik **Scan QR**.
+   - Buka WhatsApp di HP Anda > **Perangkat Tertaut** > **Tautkan Perangkat** > Scan QR code di layar.
+   - Selesai! WhatsApp Anda telah terhubung dan siap digunakan. 🎉
+
+---
+
+## 🧠 Memahami Cara Kerja Sistem WAGTW
+
+Aplikasi ini menggunakan perpaduan arsitektur modern yang memisahkan antara antarmuka web dan mesin WhatsApp:
+
+```text
+  [ Pengguna / Admin ]
+          │
+          ▼  (HTTP / Browser)
+ ┌─────────────────────────────────────────────────────────────┐
+ │  PHP MVC Web Application (Port 80 / Apache / Nginx)        │
+ │  - Routing: public/index.php -> app/core/App.php            │
+ │  - UI: Tailwind CSS, jQuery AJAX SPA (tanpa reload), Alerts │
+ │  - Database: MySQL (PDO) menyimpan kontak, campaign, log    │
+ └──────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼ (Internal HTTP REST API)
+ ┌─────────────────────────────────────────────────────────────┐
+ │  Node.js Baileys v7 Engine (Port 3001)                      │
+ │  - File: server/server.js                                   │
+ │  - Menjaga koneksi socket WhatsApp secara realtime (RAM)    │
+ │  - Menangani pesan masuk/keluar, broadcast delay, webhook   │
+ │  - Menghubungkan Chatbot AI (Groq Llama 3) & Web Search     │
+ └──────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼ (WebSocket Protocol)
+                     [ WhatsApp Servers (Meta) ]
+```
+
+---
+
 ## 🌟 Fitur Unggulan
 
 - ⚡ **Engine Cepat & Hemat Resource (Baileys v7)**: Berjalan murni via protokol WebSocket WhatsApp, mendukung LID (Linked ID), tanpa browser Chromium/Puppeteer sehingga hemat memori (hanya butuh RAM rendah).
@@ -27,30 +128,33 @@
 
 ## 📁 Struktur Direktori Proyek
 
-Proyek WAGTW memiliki struktur yang bersih dan modular:
-
 ```text
 wagtw/
-├── app/                  # Core MVC (Controllers, Models, Views, Helpers)
-│   ├── config/config.php # Konfigurasi database & auto-detect environment
-│   └── .htaccess         # Memblokir seluruh akses HTTP langsung ke core
+├── app/                  # Core MVC Aplikasi PHP
+│   ├── config/config.php # Konfigurasi database & auto-detect URL
+│   ├── controllers/      # Logika controller (Auth, Device, Broadcast, AI, dll)
+│   ├── core/             # Framework MVC (App, Controller, Database)
+│   ├── models/           # Query database & manipulasi data
+│   ├── views/            # Tampilan antarmuka HTML/Tailwind
+│   └── .htaccess         # Keamanan: Memblokir akses langsung ke folder app
 ├── public/               # Web Document Root (Aset Publik)
-│   ├── index.php         # Entry point aplikasi web
-│   ├── js/               # JavaScript SPA & Tailwind CSS offline
-│   ├── templates/        # Template contoh broadcast CSV & Excel
-│   └── uploads/          # Folder upload logo & profil (anti-script execution)
-├── server/               # Engine Node.js Baileys v7
-│   ├── server.js         # REST API & Socket Gateway Engine
-│   ├── groq.js           # Helper AI Groq Llama 3 & fallback system
-│   ├── search.js         # Helper live web search provider
-│   ├── migration.sql     # Skema database MySQL lengkap
-│   ├── .env.example      # Template konfigurasi environment engine
+│   ├── index.php         # Pintu masuk (entry point) aplikasi
+│   ├── js/               # main.js (SPA engine) & Tailwind CSS offline
+│   ├── templates/        # Contoh format file broadcast (CSV & Excel)
+│   ├── uploads/          # Folder upload logo & foto profil (anti-webshell)
+│   └── .htaccess         # Konfigurasi Apache mod_rewrite
+├── server/               # WhatsApp Engine (Node.js)
+│   ├── server.js         # API Server & WebSocket Baileys
+│   ├── groq.js           # Helper integrasi Chatbot AI Groq
+│   ├── search.js         # Helper pencarian web realtime
+│   ├── migration.sql     # Skema database MySQL cadangan
+│   ├── .env.example      # Template konfigurasi environment
 │   └── start_engine.bat  # Script auto-restart loop untuk Windows
-├── database.sql          # File SQL lengkap + Super Admin bawaan siap import
-├── build_cpanel_zip.bat  # Script otomatis pembuat bundle zip bersih
+├── database.sql          # File SQL lengkap + Super Admin siap import
+├── build_cpanel_zip.bat  # Script pembuat bundle zip bersih untuk cPanel
 ├── LICENSE               # Lisensi MIT (Coding by cs.baguosps@gmail.com)
 ├── README.md             # Dokumentasi instalasi dan penggunaan
-└── wagtw_cpanel_ready.zip# Arsip siap upload ke cPanel hosting (~380 KB)
+└── wagtw_cpanel_ready.zip# Arsip bersih siap hosting (~380 KB)
 ```
 
 ---
@@ -129,104 +233,6 @@ sudo npm install -g pm2
 
 ---
 
-## 🚀 Panduan Setup & Instalasi Proyek
-
-### 1. Letakkan File Proyek
-- **Localhost (XAMPP)**: Letakkan folder proyek di `C:\xampp\htdocs\wagtw`
-- **VPS Linux**: Letakkan di direktori web, misalnya `/var/www/wagtw`
-- **cPanel**: Upload file `wagtw_cpanel_ready.zip` ke `public_html`, lalu klik kanan **Extract**.
-
----
-
-### 2. Setup Database MySQL
-1. Buka **phpMyAdmin** (misal: `http://localhost/phpmyadmin` atau phpMyAdmin di cPanel).
-2. Buat database baru bernama `wagtw` (collation: `utf8mb4_unicode_ci`).
-3. Buka tab **Import**, pilih file:
-   👉 **`database.sql`** *(berada langsung di folder utama proyek)*
-   *(Atau file `server/migration.sql`)*
-4. Klik tombol **Go / Kirim**.
-
-> 🔑 **Akun Super Admin Bawaan (Otomatis Terbuat)**:
-> - **Username**: `admin`
-> - **Password**: `password`
-> *(Segera ganti password Anda setelah login di menu Setting demi keamanan!)*
-
----
-
-### 3. Konfigurasi File Environment (`.env`)
-1. Buka folder `server/`.
-2. Salin file `.env.example` menjadi `.env`:
-   - **Windows CMD**:
-     ```cmd
-     cd server
-     copy .env.example .env
-     ```
-   - **Linux / Bash**:
-     ```bash
-     cd server
-     cp .env.example .env
-     ```
-3. Buka file `server/.env` dan sesuaikan koneksi database Anda:
-   ```env
-   # Engine Port & Secret Token
-   WA_ENGINE_PORT=3001
-   API_SECRET_TOKEN=wagtw_secret_token_ganti_dengan_token_rahasia_anda
-
-   # Database Server
-   DB_HOST=localhost
-   DB_USER=root
-   DB_PASS=""
-   DB_NAME=wagtw
-   ```
-
----
-
-### 4. Install Dependensi Node.js
-Buka terminal/CMD, arahkan ke folder `server`:
-
-```bash
-cd server
-npm install
-```
-*Tunggu hingga pengunduhan modul `@whiskeysockets/baileys`, `express`, `mysql2`, dll selesai.*
-
----
-
-### 5. Menjalankan WhatsApp Engine
-
-#### Cara 1: Localhost Windows
-- Cukup klik dua kali file:
-  👉 **`server/start_engine.bat`**
-- *File batch ini memiliki fitur auto-restart otomatis jika terjadi kendala jaringan.*
-
-#### Cara 2: VPS Linux dengan PM2 (Production 24/7)
-```bash
-cd /var/www/wagtw/server
-pm2 start server.js --name "wagtw-engine"
-pm2 save
-pm2 startup
-```
-
-#### Cara 3: cPanel Shared Hosting
-- Di menu cPanel **Setup Node.js App**, cukup klik tombol **Restart / Start Application**.
-
----
-
-### 6. Mengakses Dashboard Web
-
-1. Pastikan Web Server Apache/XAMPP dan MySQL sudah berjalan.
-2. Buka browser Anda dan akses:
-   ```
-   http://localhost/wagtw/public
-   ```
-   *(Atau `https://domain-anda.com` jika di hosting)*
-3. Login menggunakan akun Super Admin:
-   - **Username**: `admin`
-   - **Password**: `password`
-4. Selamat, dashboard WAGTW siap digunakan! 🎉
-
----
-
 ## 📱 Panduan Penggunaan Fitur
 
 ### 1. Menautkan Nomor WhatsApp (Scan QR)
@@ -264,6 +270,27 @@ pm2 startup
 
 ---
 
+## ❓ FAQ & Mengatasi Kendala (Troubleshooting)
+
+### Q: QR Code tidak muncul atau muter terus saat diklik?
+**Penyebab**: WhatsApp Engine Node.js (`server.js`) belum berjalan di port 3001.
+**Solusi**:
+- Pastikan jendela CMD dari file `server/start_engine.bat` (atau `node server.js`) sudah berjalan dan menampilkan pesan *"WAGTW Node Engine running on port 3001"*.
+- Jika di cPanel, pastikan aplikasi Node.js berstatus **Started**.
+
+### Q: Muncul Error 404 saat mengklik menu di sidebar?
+**Penyebab**: Modul Apache `mod_rewrite` belum aktif atau file `.htaccess` tidak terbaca.
+**Solusi**:
+- Di XAMPP, buka file `httpd.conf`, cari baris `LoadModule rewrite_module modules/mod_rewrite.so`, dan pastikan tanda pagar (`#`) di depannya sudah dihapus.
+- Pastikan file `.htaccess` di root dan di folder `public/` sudah ada.
+
+### Q: Database Connection Error?
+**Penyebab**: File `server/.env` belum dibuat atau password MySQL salah.
+**Solusi**:
+- Cek kembali file `server/.env`. Di XAMPP standar, `DB_USER=root` dan `DB_PASS=""` (kosongkan tanpa spasi).
+
+---
+
 ## 🔒 Tips Keamanan & Anti-Banned WhatsApp
 
 1. **Jeda Pengiriman (Delay Dinamis)**: Selalu beri jeda minimal 5–15 detik per pesan pada pengiriman broadcast.
@@ -287,3 +314,4 @@ Project: WAGTW - WhatsApp Multi-Device Gateway & AI Marketing Platform
 
 Untuk konsultasi teknis, kolaborasi, atau kustomisasi fitur, silakan hubungi:
 - **Email**: [cs.baguosps@gmail.com](mailto:cs.baguosps@gmail.com)
+- **GitHub Repository**: [https://github.com/csbaguosps-stack/wagtw](https://github.com/csbaguosps-stack/wagtw)
