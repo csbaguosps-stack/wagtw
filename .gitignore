@@ -1,0 +1,69 @@
+# ========================================================
+# WAGTW - Git Ignore Rules
+# Coding by cs.baguosps@gmail.com
+# ========================================================
+
+# --- Environment & Secret Credentials ---
+.env
+*.env
+.env.*
+!.env.example
+temp.env
+server/temp.env
+dist_cpanel/server/temp.env
+
+# --- WhatsApp Baileys Active Sessions (Pencegah Pembajakan WA) ---
+.sessions/
+*/.sessions/
+server/.sessions/
+dist_cpanel/server/.sessions/
+auth_info_baileys/
+*creds.json*
+
+# --- Dependencies ---
+node_modules/
+*/node_modules/
+vendor/
+
+# --- Logs & Error Dumps (Pencegah Kebocoran API Key di Log) ---
+*.log
+*error.log
+*output.log
+server/*.log
+dist_cpanel/server/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Build, Staging & Archives ---
+dist_cpanel/
+*.zip
+*.tar.gz
+*.rar
+wagtw.zip
+wagtw_cpanel_ready.zip
+
+# --- Uploaded Media / User Data ---
+public/uploads/profiles/*
+!public/uploads/profiles/.gitkeep
+public/uploads/branding/*
+!public/uploads/branding/.gitkeep
+
+# --- Diagnostic & Development Scripts ---
+fix_cpanel.php
+public/fix_cpanel.php
+unlock.php
+public/unlock.php
+test_*.php
+test_*.txt
+test_preview.html
+write_fix.js
+scratch/
+server/testdb.js
+public/db_migrate_search*.php
+
+# --- OS & IDE Files ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
