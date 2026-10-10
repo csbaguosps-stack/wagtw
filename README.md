@@ -8,6 +8,10 @@
 ![License](https://img.shields.io/badge/License-MIT-teal?style=flat-square)
 ![Author](https://img.shields.io/badge/Coding%20by-cs.baguosps%40gmail.com-blueviolet?style=flat-square)
 
+<p align="center">
+  <img src="assets/img/dashboard.png" alt="WAGTW Dashboard" width="100%">
+</p>
+
 **WAGTW** adalah platform WhatsApp Gateway modern berbasis **PHP MVC (Native)** dan **Node.js Baileys Engine v7 (WebSocket murni tanpa Chromium/Puppeteer)**. Sistem ini sangat hemat RAM dan CPU, stabil, serta siap digunakan untuk multi-device WhatsApp, broadcast marketing, auto-responder otomatis, dan integrasi AI cerdas (Groq Llama 3) dengan fitur pencarian web realtime.
 
 ---
@@ -137,6 +141,8 @@ wagtw/
 │   ├── models/           # Query database & manipulasi data
 │   ├── views/            # Tampilan antarmuka HTML/Tailwind
 │   └── .htaccess         # Keamanan: Memblokir akses langsung ke folder app
+├── assets/               # Aset Dokumentasi & Media
+│   └── img/dashboard.png # Tangkapan layar antarmuka dashboard WAGTW
 ├── public/               # Web Document Root (Aset Publik)
 │   ├── index.php         # Pintu masuk (entry point) aplikasi
 │   ├── js/               # main.js (SPA engine) & Tailwind CSS offline
