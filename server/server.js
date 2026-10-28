@@ -1200,6 +1200,10 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             clearInterval(sessions[sessionId].storeInterval);
             sessions[sessionId].storeInterval = null;
         }
+        if (sessions[sessionId].heartbeatInterval) {
+            clearInterval(sessions[sessionId].heartbeatInterval);
+            sessions[sessionId].heartbeatInterval = null;
+        }
         const oldSock = sessions[sessionId].socket;
         sessions[sessionId].socket = null; // Lepas referensi segera
         try {
@@ -1210,15 +1214,16 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
 
     const existingRetries = sessions[sessionId]?.retries || 0;
     sessions[sessionId] = {
-        socket:           null,
-        qrBase64:         null,
-        pairingCode:      null,
-        status:           'initializing',
-        phone:            sessions[sessionId]?.phone || null,
-        retries:          isRetry ? existingRetries : 0,
-        store:            null,
-        storeInterval:    null,
-        reconnectTimeout: null
+        socket:            null,
+        qrBase64:          null,
+        pairingCode:       null,
+        status:            'initializing',
+        phone:             sessions[sessionId]?.phone || null,
+        retries:           isRetry ? existingRetries : 0,
+        store:             null,
+        storeInterval:     null,
+        heartbeatInterval: null,
+        reconnectTimeout:  null
     };
 
     await updateDeviceStatus(sessionId, 'initializing');
@@ -1321,18 +1326,34 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 clearInterval(sessions[sessionId].storeInterval);
                 sessions[sessionId].storeInterval = null;
             }
+            if (sessions[sessionId]?.heartbeatInterval) {
+                clearInterval(sessions[sessionId].heartbeatInterval);
+                sessions[sessionId].heartbeatInterval = null;
+            }
+
+            // Periksa apakah sesi ini sudah memiliki kredensial sah yang terdaftar di disk
+            const credsPath = path.join(sessionAuthDir, 'creds.json');
+            let hasValidCreds = false;
+            if (fs.existsSync(credsPath)) {
+                try {
+                    const c = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+                    if (c?.me?.id || c?.registered) {
+                        hasValidCreds = true;
+                    }
+                } catch (_) {}
+            }
 
             // 1. RESTART REQUIRED (Code 515) atau HANDSHAKE PAIRING SUKSES (Code 428)
             // WhatsApp sengaja menutup socket pairing dan meminta reconnect instan dengan kredensial baru.
             // JANGAN HAPUS AUTH! Langsung reconnect agar handshaking tuntas.
             if (statusCode === DisconnectReason.restartRequired || statusCode === 515 || statusCode === 428) {
-                console.log(`[RESTART] Session ${sessionId}: Handshake pairing sukses (${statusCode}). Reconnecting...`);
+                console.log(`[RESTART] Session ${sessionId}: Handshake / Restart diminta (${statusCode}). Reconnecting...`);
                 sessions[sessionId].status = 'initializing';
                 sessions[sessionId].qrBase64 = null;
                 sessions[sessionId].pairingCode = null;
                 sessions[sessionId].reconnectTimeout = setTimeout(() => {
                     createSession(sessionId, true, false).catch(console.error);
-                }, 500);
+                }, 1000);
                 return;
             }
 
@@ -1362,9 +1383,9 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 return;
             }
 
-            // 4. TIMEOUT (408) - QR kadaluwarsa karena tidak di-scan
-            if (statusCode === DisconnectReason.timedOut || statusCode === 408) {
-                console.log(`[TIMEOUT] Session ${sessionId}: QR atau koneksi timeout (408).`);
+            // 4. TIMEOUT (408) HANYA JIKA BELUM TERDAFTAR (QR kadaluwarsa karena tidak di-scan)
+            if (!hasValidCreds && (statusCode === DisconnectReason.timedOut || statusCode === 408)) {
+                console.log(`[TIMEOUT QR] Session ${sessionId}: QR Code kadaluwarsa karena tidak di-scan (408).`);
                 sessions[sessionId].status   = 'disconnected';
                 sessions[sessionId].qrBase64 = null;
                 sessions[sessionId].pairingCode = null;
@@ -1373,23 +1394,38 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 return;
             }
 
-            // 5. TEMPORARY ERROR LAINNYA (Code 500, socket reset, network glitch, dll)
-            // JANGAN HAPUS AUTH! Coba reconnect otomatis hingga 5 kali.
+            // 5. TEMPORARY ERROR LAINNYA: Connection Lost (408 pada device terdaftar), 500, socket reset, network glitch, dll.
+            // JANGAN HAPUS AUTH! Coba reconnect otomatis secara berulang dan cerdas (tanpa menyerah).
             sessions[sessionId].status   = 'disconnected';
             sessions[sessionId].qrBase64 = null;
             sessions[sessionId].pairingCode = null;
             sessions[sessionId].socket   = null;
             await updateDeviceStatus(sessionId, 'disconnected');
 
-            const retries = sessions[sessionId]?.retries || 0;
-            if (retries < 5) {
-                sessions[sessionId].retries = retries + 1;
-                console.log(`[RECONNECT] Session ${sessionId}: Retry ${retries + 1}/5 dalam 3 detik...`);
+            if (hasValidCreds) {
+                const retries = (sessions[sessionId]?.retries || 0) + 1;
+                sessions[sessionId].retries = retries;
+
+                // Smart backoff agar tidak membombardir server:
+                // Retries 1-3  : jeda 3 detik
+                // Retries 4-6  : jeda 10 detik
+                // Retries 7-10 : jeda 20 detik
+                // Retries > 10 : jeda 60 detik (tetap terus mencoba setiap 1 menit, tidak menyerah)
+                let delayMs = 3000;
+                if (retries > 10) {
+                    delayMs = 60000;
+                } else if (retries > 6) {
+                    delayMs = 20000;
+                } else if (retries > 3) {
+                    delayMs = 10000;
+                }
+
+                console.log(`[AUTO-RECONNECT] Session ${sessionId}: Mencoba hubungkan ulang (${retries}x) dalam ${delayMs / 1000} detik...`);
                 sessions[sessionId].reconnectTimeout = setTimeout(() => {
                     createSession(sessionId, true, false).catch(console.error);
-                }, 3000);
+                }, delayMs);
             } else {
-                console.log(`[GIVE UP] Session ${sessionId}: Max retries tercapai.`);
+                console.log(`[SESSION CLOSED] Session ${sessionId}: Ditutup tanpa kredensial terdaftar.`);
             }
         }
 
@@ -1406,6 +1442,21 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             sessions[sessionId].pairingCode = null;
             sessions[sessionId].retries  = 0;
             await updateDeviceStatus(sessionId, 'connected', phone);
+
+            // Bersihkan interval heartbeat lama jika ada
+            if (sessions[sessionId].heartbeatInterval) {
+                clearInterval(sessions[sessionId].heartbeatInterval);
+            }
+            // Heartbeat setiap 25 detik: kirim presence update agar socket WhatsApp tidak idle-kill oleh ISP/NAT/cPanel
+            sessions[sessionId].heartbeatInterval = setInterval(async () => {
+                try {
+                    if (sessions[sessionId]?.status === 'connected' && sessions[sessionId]?.socket) {
+                        await sessions[sessionId].socket.sendPresenceUpdate('available');
+                    }
+                } catch (e) {
+                    console.warn(`[HEARTBEAT WARN] Session ${sessionId} ping failed: ${e.message}`);
+                }
+            }, 25000);
         }
     });
 
@@ -1769,6 +1820,43 @@ app.post('/api/session/start', authMiddleware, async (req, res) => {
     res.json({ status: 'starting', message: 'Session dimulai. Ambil QR dalam beberapa detik.' });
 });
 
+// ── POST /api/session/reconnect ──────────────────────────────────────────
+app.post('/api/session/reconnect', authMiddleware, async (req, res) => {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ status: 'error', message: 'sessionId diperlukan.' });
+
+    const authPath = path.join(AUTH_DIR, sessionId);
+    const credsPath = path.join(authPath, 'creds.json');
+    let hasCreds = false;
+    if (fs.existsSync(credsPath)) {
+        try {
+            const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+            if (creds?.me?.id || creds?.registered) hasCreds = true;
+        } catch (_) {}
+    }
+
+    if (!hasCreds) {
+        return res.json({ 
+            status: 'need_qr', 
+            message: 'Perangkat belum memiliki kredensial tersimpan. Silakan Scan QR terlebih dahulu.' 
+        });
+    }
+
+    console.log(`[MANUAL RECONNECT] Mereconnect sesi: ${sessionId}`);
+    createSession(sessionId, false, false).catch(err => console.error('[RECONNECT ERROR]', err.message));
+
+    return res.json({ 
+        status: 'success', 
+        message: 'Perintah reconnect berhasil dikirim. WhatsApp sedang dihubungkan ulang...' 
+    });
+});
+
+// ── POST /api/reconnect-all ──────────────────────────────────────────────
+app.post('/api/reconnect-all', authMiddleware, async (req, res) => {
+    runHourlyAutoReconnect().catch(err => console.error('[RECONNECT ALL ERR]', err.message));
+    res.json({ status: 'success', message: 'Auto-reconnect untuk seluruh device terdaftar sedang dijalankan.' });
+});
+
 // ── GET /api/session/qr/:sessionId ──────────────────────────────────────
 app.get('/api/session/qr/:sessionId', authMiddleware, (req, res) => {
     const s = sessions[req.params.sessionId];
@@ -2102,6 +2190,75 @@ async function processBroadcasts() {
 
 // Jalankan Broadcast Worker setiap 5 detik untuk memeriksa Queue
 setInterval(processBroadcasts, 5000);
+
+
+// ─── Auto-Reconnect Setiap 1 Jam (Hourly Watchdog & Auto-Reconnect) ───────────
+const AUTO_RECONNECT_INTERVAL_MS = 60 * 60 * 1000; // 1 Jam (3600000 ms)
+
+async function runHourlyAutoReconnect() {
+    console.log(`\n[AUTO-RECONNECT 1 JAM] 🕒 Memulai siklus auto-reconnect berkala 1 jam...`);
+    try {
+        const devices = await dbQuery("SELECT id, session_id, name, phone, status FROM devices");
+        if (!devices || !devices.length) {
+            console.log(`[AUTO-RECONNECT 1 JAM] Tidak ada device terdaftar di database.`);
+            return { count: 0, reconnected: 0 };
+        }
+
+        let reconnectedCount = 0;
+        for (const dev of devices) {
+            const sid = dev.session_id;
+            const authPath = path.join(AUTH_DIR, sid);
+            const credsPath = path.join(authPath, 'creds.json');
+
+            let hasValidCreds = false;
+            if (fs.existsSync(credsPath)) {
+                try {
+                    const c = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+                    if (c?.me?.id || c?.registered) hasValidCreds = true;
+                } catch (_) {}
+            }
+
+            if (!hasValidCreds) {
+                // Perangkat belum scan QR / belum pernah login, lewati
+                continue;
+            }
+
+            // Jika sedang ada antrean broadcast aktif di server, tunda reconnect agar pengiriman tidak terputus
+            if (Object.keys(activeCampaignsLocks).length > 0) {
+                console.log(`[AUTO-RECONNECT 1 JAM] Sesi ${sid} (${dev.phone || dev.name}): Ditunda karena broadcast sedang aktif.`);
+                continue;
+            }
+
+            const currentSession = sessions[sid];
+            const isAlive = currentSession?.status === 'connected' && currentSession?.socket;
+
+            if (!isAlive) {
+                console.log(`[AUTO-RECONNECT 1 JAM] ⚠️ Sesi ${sid} (${dev.phone || dev.name}) saat ini '${dev.status}'. Menghubungkan ulang ke WhatsApp sekarang...`);
+                createSession(sid, false, false).catch(err => {
+                    console.error(`[AUTO-RECONNECT 1 JAM ERR] Sesi ${sid}:`, err.message);
+                });
+                reconnectedCount++;
+            } else {
+                console.log(`[AUTO-RECONNECT 1 JAM] 🔄 Sesi ${sid} (${dev.phone || dev.name}) aktif. Melakukan penyegaran socket & koneksi berkala...`);
+                createSession(sid, false, false).catch(err => {
+                    console.error(`[AUTO-RECONNECT 1 JAM ERR] Sesi ${sid}:`, err.message);
+                });
+                reconnectedCount++;
+            }
+
+            // Jeda 3 detik antar device agar tidak terjadi beban spike bersamaan
+            await new Promise(r => setTimeout(r, 3000));
+        }
+        console.log(`[AUTO-RECONNECT 1 JAM] ✅ Siklus auto-reconnect selesai (${reconnectedCount} sesi diproses).\n`);
+        return { count: devices.length, reconnected: reconnectedCount };
+    } catch (err) {
+        console.error('[AUTO-RECONNECT 1 JAM FATAL]', err.message);
+        return { error: err.message };
+    }
+}
+
+// Jalankan watchdog & auto-reconnect setiap 1 jam
+setInterval(runHourlyAutoReconnect, AUTO_RECONNECT_INTERVAL_MS);
 
 
 // ─── Auto-Restore Sessions on Startup ────────────────────────────────────────

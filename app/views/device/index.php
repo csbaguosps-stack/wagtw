@@ -23,14 +23,19 @@ if ($dbModels) {
 ?>
 
 <!-- ─── Page Header ─────────────────────────────────────────────────────────── -->
-<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div class="mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
     <div>
-        <h2 class="text-2xl font-bold text-gray-800">Manajemen Device</h2>
-        <p class="text-sm text-gray-500 mt-1">Kelola sesi WhatsApp Multi-Device. Powered by <strong class="text-emerald-600">WAGTW Engine</strong>.</p>
+        <div class="flex items-center gap-3 flex-wrap">
+            <h2 class="text-2xl font-bold text-gray-800">Manajemen Device</h2>
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-full shadow-sm" title="Engine otomatis melakukan auto-reconnect dan health check setiap 1 jam">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Auto-Reconnect: 1 Jam
+            </span>
+        </div>
+        <p class="text-sm text-gray-500 mt-1">Kelola sesi WhatsApp Multi-Device. Powered by <strong class="text-emerald-600 font-semibold">WAGTW Engine</strong>.</p>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2.5 flex-wrap">
         <?php if(!empty($data['filter_users'])): ?>
-        <select name="filter_user" onchange="loadPage('<?= BASEURL ?>/device?filter_user='+this.value)" class="bg-white border border-gray-200 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-400">
+        <select name="filter_user" onchange="window.location.href='<?= BASEURL ?>/device?filter_user='+this.value" class="bg-gray-50 hover:bg-white border border-gray-200 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-green-400 font-medium text-gray-700 transition">
             <option value="all" <?= $data['current_filter'] === 'all' ? 'selected' : '' ?>>Semua Device</option>
             <?php foreach($data['filter_users'] as $fu): ?>
             <option value="<?= $fu['id'] ?>" <?= $data['current_filter'] == $fu['id'] ? 'selected' : '' ?>>
@@ -40,12 +45,18 @@ if ($dbModels) {
         </select>
         <?php endif; ?>
         
-        <span id="engineBadge" class="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+        <span id="engineBadge" class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-2 rounded-xl border border-gray-200/60">
             <span class="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></span> Cek Engine...
         </span>
+        <button onclick="doReconnectAll()"
+                title="Hubungkan ulang / segarkan seluruh device terdaftar"
+                class="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold px-3.5 py-2 rounded-xl transition shadow-sm active:scale-95">
+            <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Reconnect Semua
+        </button>
         <button onclick="openModal('addDeviceModal')"
-                class="bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg px-5 py-2.5 transition transform hover:scale-[1.02] shadow-sm flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition shadow-sm shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
             Tambah Device
         </button>
     </div>
@@ -131,13 +142,23 @@ if ($dbModels) {
                 <!-- Actions -->
                 <td class="px-4 py-3.5 text-right">
                     <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                        <!-- Primary Button: Scan QR or Reconnect -->
+                        <!-- Reconnect Button -->
                         <button onclick="doReconnect('<?= htmlspecialchars($dev['session_id']) ?>')"
-                                title="<?= $dev['status'] === 'connected' ? 'Hubungkan Ulang' : 'Scan QR WhatsApp' ?>"
-                                class="inline-flex items-center gap-1.5 <?= $dev['status'] === 'connected' ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25 animate-pulse' ?> text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
-                            <?= $dev['status'] === 'connected' ? 'Reconnect' : 'Scan QR' ?>
+                                title="Hubungkan Ulang Sesi WhatsApp"
+                                class="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Reconnect
                         </button>
+
+                        <!-- Scan QR Button (jika belum terhubung atau ingin scan baru) -->
+                        <?php if ($dev['status'] !== 'connected'): ?>
+                        <button onclick="scanQR('<?= htmlspecialchars($dev['session_id']) ?>', false)"
+                                title="Scan QR Code WhatsApp"
+                                class="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25 text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95 animate-pulse">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                            Scan QR
+                        </button>
+                        <?php endif; ?>
 
                         <!-- Disconnect -->
                         <?php if ($dev['status'] === 'connected'): ?>
@@ -152,15 +173,15 @@ if ($dbModels) {
                         <!-- Token -->
                         <button onclick="openTokenModal(<?= $dev['id'] ?>, '<?= htmlspecialchars($dev['name'], ENT_QUOTES) ?>')"
                                 title="API Token"
-                                class="inline-flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium px-2.5 py-1.5 rounded-lg transition">
-                            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                                class="inline-flex items-center gap-1 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95 shadow-sm">
+                            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
                             Token
                         </button>
 
                         <!-- AI Setting -->
                         <button onclick="openAiModal(<?= $dev['id'] ?>, '<?= htmlspecialchars($dev['name'], ENT_QUOTES) ?>')"
                                 title="Pengaturan AI Auto-Reply"
-                                class="inline-flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
+                                class="inline-flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95 shadow-sm">
                             <svg class="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
                             AI
                         </button>
@@ -168,7 +189,7 @@ if ($dbModels) {
                         <!-- AI Data -->
                         <button onclick="openAiDataModal(<?= $dev['id'] ?>, '<?= htmlspecialchars($dev['name'], ENT_QUOTES) ?>')"
                                 title="Knowledge Base AI"
-                                class="inline-flex items-center gap-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
+                                class="inline-flex items-center gap-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95 shadow-sm">
                             <svg class="w-3.5 h-3.5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
                             Data
                         </button>
@@ -176,14 +197,14 @@ if ($dbModels) {
                         <!-- Edit -->
                         <button onclick="openEditDeviceModal(<?= $dev['id'] ?>, '<?= htmlspecialchars($dev['name'], ENT_QUOTES) ?>')"
                                 title="Edit Nama Device"
-                                class="inline-flex items-center p-1.5 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-500 rounded-lg transition">
+                                class="inline-flex items-center p-1.5 bg-white hover:bg-blue-50 hover:text-blue-600 text-gray-400 border border-gray-200 rounded-lg transition active:scale-95 shadow-sm">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                         </button>
 
                         <!-- Delete -->
                         <button onclick="deleteDevice(<?= $dev['id'] ?>)"
                                 title="Hapus Device"
-                                class="inline-flex items-center p-1.5 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-500 rounded-lg transition">
+                                class="inline-flex items-center p-1.5 bg-white hover:bg-rose-50 hover:text-rose-600 text-gray-400 border border-gray-200 rounded-lg transition active:scale-95 shadow-sm">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                         </button>
                     </div>
@@ -810,13 +831,7 @@ if ($dbModels) {
     window.closeModal = id => $('#' + id).removeClass('flex').addClass('hidden');
 
     function reloadPage() {
-        if (typeof window.loadPage === 'function') {
-            const currentFilter = $('select[name="filter_user"]').val() || '<?= $data['current_filter'] ?? 'all' ?>';
-            const url = BASEURL + '/device' + (currentFilter && currentFilter !== 'all' ? '?filter_user=' + currentFilter : '');
-            window.loadPage(url, false);
-        } else {
-            location.reload();
-        }
+        window.location.reload();
     }
 
     // ── Add Device ────────────────────────────────────────────────────────
@@ -879,9 +894,93 @@ if ($dbModels) {
         });
     };
 
-    // ── Reconnect ─────────────────────────────────────────────────────────
+    // ── Reconnect Tunggal ──────────────────────────────────────────────────
     window.doReconnect = function (sessionId) {
-        scanQR(sessionId, true);
+        Swal.fire({
+            title: 'Menghubungkan Ulang...',
+            text: 'Mencoba reconnect perangkat dengan WhatsApp. Seluruh halaman akan otomatis dimuat ulang...',
+            icon: 'info',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        $.ajax({
+            url: BASEURL + '/device/reconnect',
+            type: 'POST',
+            data: { session_id: sessionId },
+            dataType: 'json',
+            success(res) {
+                if (res.status === 'need_qr') {
+                    Swal.close();
+                    scanQR(sessionId, false);
+                } else {
+                    Swal.fire({
+                        icon: res.status === 'success' ? 'success' : 'info',
+                        title: res.status === 'success' ? 'Berhasil Reconnect!' : 'Pemberitahuan',
+                        text: (res.message || 'Perangkat dihubungkan ulang.') + ' Memuat ulang seluruh halaman...',
+                        timer: 1000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                }
+            },
+            error() {
+                // Jika error timeout atau jaringan, tetap reload halaman penuh agar melihat status terkini
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Memperbarui Halaman...',
+                    text: 'Memuat ulang seluruh halaman...',
+                    timer: 1000,
+                    showConfirmButton: false
+                }).then(() => {
+                    window.location.reload();
+                });
+            }
+        });
+    };
+
+    // ── Reconnect Semua Device ─────────────────────────────────────────────
+    window.doReconnectAll = function () {
+        Swal.fire({
+            title: 'Reconnect Semua Device?',
+            text: 'Engine akan menyegarkan seluruh koneksi WhatsApp dan memuat ulang seluruh halaman.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#2563eb',
+            confirmButtonText: 'Ya, Reconnect Semua!',
+            cancelButtonText: 'Batal'
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            Swal.fire({
+                title: 'Memproses Reconnect...',
+                text: 'Menghubungkan ulang semua perangkat. Seluruh halaman akan otomatis dimuat ulang...',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            $.ajax({
+                url: BASEURL + '/device/autoReconnectCron',
+                type: 'POST',
+                dataType: 'json',
+                success(res) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil Reconnect Semua!',
+                        text: (res.message || 'Koneksi disegarkan.') + ' Memuat ulang seluruh halaman...',
+                        timer: 1000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                },
+                error() {
+                    window.location.reload();
+                }
+            });
+        });
     };
 
     // ── Disconnect ────────────────────────────────────────────────────────

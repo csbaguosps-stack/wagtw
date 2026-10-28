@@ -506,7 +506,20 @@ class Device extends Controller {
         $sessionId = $_POST['session_id'] ?? '';
         if (empty($sessionId)) { echo json_encode(['status' => 'error', 'message' => 'session_id diperlukan']); return; }
 
-        $result = $this->callNode('POST', '/api/session/start', ['sessionId' => $sessionId, 'forceNew' => true]);
+        $result = $this->callNode('POST', '/api/session/reconnect', ['sessionId' => $sessionId]);
+        if ($result === null) {
+            echo json_encode(['status' => 'engine_offline', 'message' => 'WAGTW Engine offline. Jalankan: node server.js']); return;
+        }
+        echo json_encode($result);
+    }
+
+    // ─── autoReconnectCron() ───────────────────────────────────────────────
+    // URL ini dapat dipanggil via Cron Job cPanel / Task Scheduler setiap 1 jam:
+    // curl http://domain/wagtw/public/device/autoReconnectCron
+    public function autoReconnectCron()
+    {
+        header('Content-Type: application/json');
+        $result = $this->callNode('POST', '/api/reconnect-all', []);
         if ($result === null) {
             echo json_encode(['status' => 'engine_offline', 'message' => 'WAGTW Engine offline.']); return;
         }
