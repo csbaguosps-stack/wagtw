@@ -2,7 +2,7 @@
 
 ![Version](https://img.shields.io/badge/Version-3.0.0-emerald?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%20|%208.0%20|%208.1%20|%208.2-blue?style=flat-square)
-![Node.js](https://img.shields.io/badge/Node.js-18.x%20|%2020.x%20LTS-green?style=flat-square)
+![Node.js](https://img.shields.io/badge/Node.js-20.x%20|%2022.x%20(Recommended)-green?style=flat-square)
 ![Baileys](https://img.shields.io/badge/Engine-Baileys%20v7%20(Pure%20WebSocket)-purple?style=flat-square)
 ![Database](https://img.shields.io/badge/Database-MySQL%20|%20MariaDB-orange?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-teal?style=flat-square)
@@ -176,18 +176,18 @@ Pastikan lingkungan server Anda memenuhi spesifikasi berikut:
 | **PHP** | PHP 7.4 | PHP 8.1 atau PHP 8.2 |
 | **Ekstensi PHP** | `pdo_mysql`, `curl`, `mbstring`, `fileinfo`, `json` | Aktif bawaan PHP |
 | **Database** | MySQL 5.7+ atau MariaDB 10.3+ | MySQL 8.0 / MariaDB 10.6+ |
-| **Node.js** | Node.js 18.x LTS | Node.js 20.x LTS |
+| **Node.js** | Node.js 20.x LTS | Node.js 22.x LTS (Direkomendasikan) |
 
 ---
 
 ## 🛠️ Panduan Instalasi Node.js
 
-Node.js bertugas menjalankan WhatsApp Engine (`server.js`). Pilih cara instalasi sesuai lingkungan Anda:
+Node.js bertugas menjalankan WhatsApp Engine (`server.js`). Sangat direkomendasikan menggunakan **Node.js versi 22.x LTS** untuk kestabilan protokol WebSocket dan Baileys v7 terbaru.
 
 ### A. Instalasi Node.js di Windows (Localhost / XAMPP)
 
 1. Kunjungi situs resmi Node.js: [https://nodejs.org](https://nodejs.org)
-2. Unduh versi **LTS (Long Term Support)** installer `.msi` (contoh: `v20.x.x LTS`).
+2. Unduh versi **LTS (Long Term Support)** installer `.msi` (contoh: `v22.x.x LTS` - Direkomendasikan).
 3. Jalankan file `.msi`:
    - Klik **Next** dan setujui License Agreement.
    - Pada pilihan opsi, pastikan **Add to PATH** dicentang (aktif default).
@@ -197,7 +197,7 @@ Node.js bertugas menjalankan WhatsApp Engine (`server.js`). Pilih cara instalasi
    node -v
    npm -v
    ```
-   *Jika versi muncul (misal: `v20.18.0`), Node.js berhasil terpasang.*
+   *Jika versi muncul (misal: `v22.11.0`), Node.js berhasil terpasang.*
 
 ---
 
@@ -209,8 +209,8 @@ Jalankan perintah berikut via SSH terminal:
 # 1. Update package list & install curl
 sudo apt update && sudo apt install -y curl build-essential
 
-# 2. Tambahkan repo NodeSource Node.js 20.x LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# 2. Tambahkan repo NodeSource Node.js 22.x LTS (Direkomendasikan)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 
 # 3. Install Node.js
 sudo apt install -y nodejs
@@ -230,7 +230,7 @@ sudo npm install -g pm2
 1. Masuk ke dashboard **cPanel** hosting Anda.
 2. Cari dan klik menu **Setup Node.js App** (CloudLinux).
 3. Klik tombol **Create Application**:
-   - **Node.js version**: Pilih `18.x` atau `20.x`
+   - **Node.js version**: Pilih `22.x` (Direkomendasikan) atau `20.x`
    - **Application mode**: `Production`
    - **Application root**: Isi `server`
    - **Application startup file**: Isi `server.js`

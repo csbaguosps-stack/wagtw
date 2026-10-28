@@ -2314,6 +2314,7 @@ function onServerReady(listeningOn) {
     console.log('╠═══════════════════════════════════════════════════╣');
     console.log(`║  Port   : ${String(listeningOn).padEnd(40)}║`);
     console.log(`║  Token  : ${API_TOKEN.substring(0, 20).padEnd(40)}║`);
+    console.log(`║  Node.js: ${String(process.version + ' (Disarankan v22.x)').padEnd(40)}║`);
     console.log('║  Groq AI: ENABLED (auto-switch)                   ║');
     console.log('╚═══════════════════════════════════════════════════╝');
     console.log('');

@@ -6,6 +6,9 @@
   "author": "cs.baguosps@gmail.com",
   "license": "MIT",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0 || >=22.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
