@@ -68,9 +68,15 @@ class AiData_model {
 
     // ─── Device AI Settings ───────────────────────────────────────────────────
 
-    public function getSettings($deviceId, $userId)
+    public function getSettings($deviceId, $userId = null)
     {
-        $this->db->query("SELECT * FROM device_ai_settings WHERE device_id = :device_id AND user_id IN ($userId) LIMIT 1");
+        if (!empty($userId)) {
+            $this->db->query("SELECT ads.* FROM device_ai_settings ads 
+                              INNER JOIN devices d ON d.id = ads.device_id 
+                              WHERE ads.device_id = :device_id AND d.user_id IN ($userId) LIMIT 1");
+        } else {
+            $this->db->query("SELECT * FROM device_ai_settings WHERE device_id = :device_id LIMIT 1");
+        }
         $this->db->bind('device_id', $deviceId);
         return $this->db->single();
     }
@@ -83,8 +89,9 @@ class AiData_model {
                             (:device_id, :user_id, :ai_enabled, :activated_by_user_id, :activated_at, :search_enabled, :target_reply, :ai_server_id, :model, :style, :brand, :ai_name, :language, :rules, :reply_mode, NOW(), NOW())
                           ON DUPLICATE KEY UPDATE
                             ai_enabled            = VALUES(ai_enabled),
+                            user_id               = VALUES(user_id),
                             activated_by_user_id  = VALUES(activated_by_user_id),
-                            activated_at          = IF(VALUES(ai_enabled) = 1 AND ai_enabled = 0, NOW(), activated_at),
+                            activated_at          = IF(VALUES(ai_enabled) = 1 AND (ai_enabled = 0 OR activated_at IS NULL), NOW(), IF(VALUES(ai_enabled) = 0, NULL, activated_at)),
                             search_enabled        = VALUES(search_enabled),
                             target_reply          = VALUES(target_reply),
                             ai_server_id          = VALUES(ai_server_id),

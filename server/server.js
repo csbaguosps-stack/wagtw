@@ -764,64 +764,68 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
     );
 
     const aiConfig = aiSettings.length ? aiSettings[0] : null;
+    const isAiEnabled = !!(aiConfig && (aiConfig.ai_enabled == 1 || aiConfig.ai_enabled === true || aiConfig.ai_enabled === '1'));
     
     // Cek Target Balasan (Pribadi/Grup)
     const targetReply = aiConfig ? (aiConfig.target_reply || 'both') : 'both';
     const isGroup = senderJid.endsWith('@g.us');
 
-    // ── FITUR UNMUTE / REAKTIVASI AI (Pribadi maupun Grup) ────────────────────
-    const cleanCmd = incomingText.trim().toLowerCase();
-    const isCustomerReactivate = cleanCmd === '#ai on' || cleanCmd === '#ai aktif' || cleanCmd === '!ai on' || cleanCmd === '/ai on' || cleanCmd === 'aktifkan ai'
-        || isEndConversationKeyword(incomingText, aiConfig?.ai_reactivate_keyword);
+    // ── FITUR AI (UNMUTE, CHAT ADMIN, DAN MUTE) HANYA BERJALAN JIKA AI AKTIF ──
+    if (isAiEnabled) {
+        // 1. FITUR UNMUTE / REAKTIVASI AI (Pribadi maupun Grup)
+        const cleanCmd = incomingText.trim().toLowerCase();
+        const isCustomerReactivate = cleanCmd === '#ai on' || cleanCmd === '#ai aktif' || cleanCmd === '!ai on' || cleanCmd === '/ai on' || cleanCmd === 'aktifkan ai'
+            || isEndConversationKeyword(incomingText, aiConfig?.ai_reactivate_keyword);
 
-    if (isCustomerReactivate) {
-        console.log(`[AI UNMUTE] Kontak/Grup ${remotePhone} meminta reaktivasi Bot AI (Teks: '${incomingText}').`);
-        await unmuteContact(deviceId, remotePhone, senderJid);
-        const reactivatedText = `🤖 *Bot AI telah diaktifkan kembali* untuk percakapan ini. Silakan tanyakan apa saja! 😊`;
-        try {
-            const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText }, { quoted: fullMsg });
-            markBotSentMessage(sentMsg?.key?.id);
-            await saveMessageToDB(sessionId, sentMsg?.key?.id || null, myPhone, remotePhone, 'text', reactivatedText, 'out', 'sent');
-        } catch (_) {
-            const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText });
-            markBotSentMessage(sentMsg?.key?.id);
-        }
-        return;
-    }
-
-    // ── FITUR CHAT ADMIN & HANDOFF (Pribadi maupun Grup) ──────────────────────
-    if (isChatAdminTrigger(incomingText)) {
-        console.log(`[CHAT ADMIN] Kontak/Grup ${remotePhone} memicu Chat Admin. Me-mute Bot AI.`);
-        await muteContact(deviceId, remotePhone, 'chat_admin');
-
-        // Gunakan template kustom handoff dari device_ai_settings jika ada
-        const handoffText = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
-            ? aiConfig.ai_handoff_text.trim()
-            : `Baik, permintaan Anda telah kami teruskan ke *Admin / Staf kami* 👤\n\nAdmin kami akan segera membaca dan merespons chat Anda secara langsung. Sementara ini, Bot AI dinonaktifkan untuk percakapan ini dan akan aktif kembali besok hari.\n\nTerima kasih atas kesabaran Anda! 🙏`;
-
-        try {
-            let sentMsg = null;
+        if (isCustomerReactivate) {
+            console.log(`[AI UNMUTE] Kontak/Grup ${remotePhone} meminta reaktivasi Bot AI (Teks: '${incomingText}').`);
+            await unmuteContact(deviceId, remotePhone, senderJid);
+            const reactivatedText = `🤖 *Bot AI telah diaktifkan kembali* untuk percakapan ini. Silakan tanyakan apa saja! 😊`;
             try {
-                sentMsg = await sock.sendMessage(senderJid, { text: handoffText }, { quoted: fullMsg });
-            } catch (quotedErr) {
-                sentMsg = await sock.sendMessage(senderJid, { text: handoffText });
+                const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText }, { quoted: fullMsg });
+                markBotSentMessage(sentMsg?.key?.id);
+                await saveMessageToDB(sessionId, sentMsg?.key?.id || null, myPhone, remotePhone, 'text', reactivatedText, 'out', 'sent');
+            } catch (_) {
+                const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText });
+                markBotSentMessage(sentMsg?.key?.id);
             }
-            const waMsgId = sentMsg?.key?.id || null;
-            markBotSentMessage(waMsgId);
-            await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', handoffText, 'out', 'sent');
-        } catch (err) {
-            console.error('[Chat Admin Handoff Send Error]', err.message);
+            return;
         }
-        return; // Hentikan di sini, jangan jalankan AI atau autoreply
-    }
 
-    // ── CEK STATUS MUTE (Pribadi maupun Grup) ────────────────────────
-    const isMuted = await isContactMuted(deviceId, remotePhone);
-    if (isMuted) {
-        console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
-        // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
-        await touchMutedContact(deviceId, remotePhone);
-        return; // Hentikan di sini, jangan membalas
+        // 2. FITUR CHAT ADMIN & HANDOFF (Pribadi maupun Grup)
+        if (isChatAdminTrigger(incomingText)) {
+            console.log(`[CHAT ADMIN] Kontak/Grup ${remotePhone} memicu Chat Admin. Me-mute Bot AI.`);
+            await muteContact(deviceId, remotePhone, 'chat_admin');
+
+            // Gunakan template kustom handoff dari device_ai_settings jika ada
+            const handoffText = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
+                ? aiConfig.ai_handoff_text.trim()
+                : `Baik, permintaan Anda telah kami teruskan ke *Admin / Staf kami* 👤\n\nAdmin kami akan segera membaca dan merespons chat Anda secara langsung. Sementara ini, Bot AI dinonaktifkan untuk percakapan ini dan akan aktif kembali besok hari.\n\nTerima kasih atas kesabaran Anda! 🙏`;
+
+            try {
+                let sentMsg = null;
+                try {
+                    sentMsg = await sock.sendMessage(senderJid, { text: handoffText }, { quoted: fullMsg });
+                } catch (quotedErr) {
+                    sentMsg = await sock.sendMessage(senderJid, { text: handoffText });
+                }
+                const waMsgId = sentMsg?.key?.id || null;
+                markBotSentMessage(waMsgId);
+                await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', handoffText, 'out', 'sent');
+            } catch (err) {
+                console.error('[Chat Admin Handoff Send Error]', err.message);
+            }
+            return; // Hentikan di sini, jangan jalankan AI atau autoreply
+        }
+
+        // 3. CEK STATUS MUTE (Pribadi maupun Grup)
+        const isMuted = await isContactMuted(deviceId, remotePhone);
+        if (isMuted) {
+            console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
+            // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
+            await touchMutedContact(deviceId, remotePhone);
+            return; // Hentikan di sini, jangan membalas
+        }
     }
 
     // ── WHATSAPP BUSINESS FEATURES (Welcome & Away) ──────────────────────────
@@ -969,7 +973,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
     const replyMode = aiConfig ? (aiConfig.reply_mode || 'manual') : 'manual';
     const isAutoAi = (replyMode === 'auto' || replyMode === 'ai');
 
-    const aiEnabled = aiConfig && aiConfig.ai_enabled == 1 && isTargetMatch && isAutoAi;
+    const aiEnabled = isAiEnabled && isTargetMatch && isAutoAi;
     const searchEnabled = aiConfig && aiConfig.search_enabled == 1;
 
     // ── MODE AI: Gunakan Groq ─────────────────────────────────────────────────
@@ -1548,40 +1552,46 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                     if (devId && remotePhone) {
                         // Ambil konfigurasi kata kunci penutupan sesi dari device_ai_settings
                         const devAiSets = await dbQuery(
-                            'SELECT ai_reactivate_keyword, ai_reactivate_notify, ai_reactivate_message FROM device_ai_settings WHERE device_id = ? LIMIT 1',
+                            'SELECT ai_enabled, ai_reactivate_keyword, ai_reactivate_notify, ai_reactivate_message FROM device_ai_settings WHERE device_id = ? LIMIT 1',
                             [devId]
                         );
-                        const reactivateKeywordSetting = (devAiSets.length && devAiSets[0].ai_reactivate_keyword)
-                            ? devAiSets[0].ai_reactivate_keyword
-                            : 'akhiri percakapan, akhiri, selesai, #selesai, tutup sesi, end chat';
 
-                        // ── CEK APAKAH ADMIN MENGETIK SALAH SATU KATA KUNCI "AKHIRI PERCAKAPAN" ──
-                        const isEndConversation = isEndConversationKeyword(incomingText, reactivateKeywordSetting);
+                        const isAiActiveOnDev = devAiSets.length && (devAiSets[0].ai_enabled == 1 || devAiSets[0].ai_enabled === true || devAiSets[0].ai_enabled === '1');
 
-                        if (isEndConversation) {
-                            console.log(`[ADMIN END CONVERSATION] Admin mengetik '${incomingText}'. Mengaktifkan kembali Bot AI untuk ${remotePhone}.`);
-                            await unmuteContact(devId, remotePhone, senderJid);
+                        // Logika reaktivasi AI / mute admin HANYA berlaku jika AI pada device ini AKTIF
+                        if (isAiActiveOnDev) {
+                            const reactivateKeywordSetting = (devAiSets.length && devAiSets[0].ai_reactivate_keyword)
+                                ? devAiSets[0].ai_reactivate_keyword
+                                : 'akhiri percakapan, akhiri, selesai, #selesai, tutup sesi, end chat';
 
-                            // Kirim pesan konfirmasi ke kontak jika notifikasi diaktifkan
-                            const shouldNotify = devAiSets.length ? (parseInt(devAiSets[0].ai_reactivate_notify) === 1) : true;
-                            const notifyText = (devAiSets.length && devAiSets[0].ai_reactivate_message && devAiSets[0].ai_reactivate_message.trim())
-                                ? devAiSets[0].ai_reactivate_message.trim()
-                                : 'Sesi percakapan dengan Admin telah selesai. Bot AI kami kini aktif kembali untuk melayani Anda. Silakan tanyakan apa saja yang Anda butuhkan! 🤖';
+                            // ── CEK APAKAH ADMIN MENGETIK SALAH SATU KATA KUNCI "AKHIRI PERCAKAPAN" ──
+                            const isEndConversation = isEndConversationKeyword(incomingText, reactivateKeywordSetting);
 
-                            if (shouldNotify && notifyText) {
-                                try {
-                                    const sentMsg = await sock.sendMessage(senderJid, { text: notifyText });
-                                    const notifyWaId = sentMsg?.key?.id || null;
-                                    markBotSentMessage(notifyWaId);
-                                    await saveMessageToDB(sessionId, notifyWaId, myPhone, remotePhone, 'text', notifyText, 'out', 'sent');
-                                } catch (notifyErr) {
-                                    console.warn('[ADMIN END CONVERSATION] Gagal mengirim pesan notifikasi:', notifyErr.message);
+                            if (isEndConversation) {
+                                console.log(`[ADMIN END CONVERSATION] Admin mengetik '${incomingText}'. Mengaktifkan kembali Bot AI untuk ${remotePhone}.`);
+                                await unmuteContact(devId, remotePhone, senderJid);
+
+                                // Kirim pesan konfirmasi ke kontak jika notifikasi diaktifkan
+                                const shouldNotify = devAiSets.length ? (parseInt(devAiSets[0].ai_reactivate_notify) === 1) : true;
+                                const notifyText = (devAiSets.length && devAiSets[0].ai_reactivate_message && devAiSets[0].ai_reactivate_message.trim())
+                                    ? devAiSets[0].ai_reactivate_message.trim()
+                                    : 'Sesi percakapan dengan Admin telah selesai. Bot AI kami kini aktif kembali untuk melayani Anda. Silakan tanyakan apa saja yang Anda butuhkan! 🤖';
+
+                                if (shouldNotify && notifyText) {
+                                    try {
+                                        const sentMsg = await sock.sendMessage(senderJid, { text: notifyText });
+                                        const notifyWaId = sentMsg?.key?.id || null;
+                                        markBotSentMessage(notifyWaId);
+                                        await saveMessageToDB(sessionId, notifyWaId, myPhone, remotePhone, 'text', notifyText, 'out', 'sent');
+                                    } catch (notifyErr) {
+                                        console.warn('[ADMIN END CONVERSATION] Gagal mengirim pesan notifikasi:', notifyErr.message);
+                                    }
                                 }
+                            } else {
+                                // Admin sedang chat manual biasa, maka mute kontak / perpanjang masa mute ("setelah tidak ada respon")
+                                console.log(`[ADMIN CHAT DETECTED] Human admin sedang berbicara langsung dengan ${remotePhone} (${senderJid}). Me-mute/memperpanjang mute Bot AI.`);
+                                await muteContact(devId, remotePhone, 'admin_talking');
                             }
-                        } else {
-                            // Admin sedang chat manual biasa, maka mute kontak / perpanjang masa mute ("setelah tidak ada respon")
-                            console.log(`[ADMIN CHAT DETECTED] Human admin sedang berbicara langsung dengan ${remotePhone} (${senderJid}). Me-mute/memperpanjang mute Bot AI.`);
-                            await muteContact(devId, remotePhone, 'admin_talking');
                         }
                     }
                 }

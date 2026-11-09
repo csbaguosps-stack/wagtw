@@ -379,7 +379,7 @@ class Device extends Controller {
                 'device_id'           => $deviceId,
                 'user_id'             => $_SESSION['user_id'],
                 'ai_enabled'          => $aiEnabled,
-                'activated_by_user_id'=> $_SESSION['user_id'], // track siapa yang mengaktifkan AI
+                'activated_by_user_id'=> $aiEnabled ? $_SESSION['user_id'] : null, // track siapa yang mengaktifkan AI
                 'search_enabled'      => $searchEnabled,
                 'target_reply'        => $targetReply,
                 'ai_server_id'        => $serverId,

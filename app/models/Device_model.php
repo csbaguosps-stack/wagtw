@@ -11,9 +11,11 @@ class Device_model {
 
     public function getAllDevicesByUser($userId)
     {
-        $this->db->query("SELECT d.*, u.username as creator_username, u.name as creator_name 
+        $this->db->query("SELECT d.*, u.username as creator_username, u.name as creator_name,
+                                 das.ai_enabled
                           FROM " . $this->table . " d 
                           LEFT JOIN users u ON u.id = d.user_id 
+                          LEFT JOIN device_ai_settings das ON das.device_id = d.id
                           WHERE d.user_id IN ($userId) 
                           ORDER BY d.id DESC");
         return $this->db->resultSet();

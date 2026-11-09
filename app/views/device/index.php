@@ -179,11 +179,12 @@ if ($dbModels) {
                         </button>
 
                         <!-- AI Setting -->
+                        <?php $isAiOn = (!empty($dev['ai_enabled']) && $dev['ai_enabled'] == 1); ?>
                         <button onclick="openAiModal(<?= $dev['id'] ?>, '<?= htmlspecialchars($dev['name'], ENT_QUOTES) ?>')"
-                                title="Pengaturan AI Auto-Reply"
-                                class="inline-flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95 shadow-sm">
-                            <svg class="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
-                            AI
+                                title="Pengaturan AI Auto-Reply (Status: <?= $isAiOn ? 'Aktif' : 'Nonaktif' ?>)"
+                                class="inline-flex items-center gap-1.5 <?= $isAiOn ? 'bg-purple-100 hover:bg-purple-200 text-purple-800 border-purple-300 ring-1 ring-purple-300' : 'bg-gray-50 hover:bg-gray-100 text-gray-500 border-gray-200' ?> border text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95 shadow-sm">
+                            <svg class="w-3.5 h-3.5 <?= $isAiOn ? 'text-purple-600' : 'text-gray-400' ?>" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
+                            <span>AI <span class="text-[10px] font-bold px-1 py-0.5 rounded <?= $isAiOn ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600' ?>"><?= $isAiOn ? 'ON' : 'OFF' ?></span></span>
                         </button>
 
                         <!-- AI Data -->
@@ -1178,8 +1179,9 @@ if ($dbModels) {
             .then(r => r.json())
             .then(res => {
                 if (res.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Tersimpan!', text: res.message, timer: 1500, showConfirmButton: false });
+                    Swal.fire({ icon: 'success', title: 'Tersimpan!', text: res.message, timer: 1200, showConfirmButton: false });
                     closeModal('aiModal');
+                    setTimeout(() => location.reload(), 1200);
                 } else { Swal.fire('Gagal', res.message, 'error'); }
             });
     });
