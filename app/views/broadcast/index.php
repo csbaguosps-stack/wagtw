@@ -560,9 +560,13 @@ $successRate = $processed > 0 ? round(($totalSent / $processed) * 100, 1) : 100;
                                     <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
                                     Konten Pesan
                                 </h4>
-                                <div class="flex items-center gap-1 text-[11px]">
+                                <div class="flex items-center gap-1 text-[11px] flex-wrap">
                                     <button type="button" onclick="insertEditTag('[Name]')" class="px-2 py-0.5 rounded bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold transition">+ [Name]</button>
+                                    <button type="button" onclick="insertEditTag('[Salam]')" class="px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-semibold transition">+ [Salam]</button>
                                     <button type="button" onclick="insertEditTag('{Hai|Halo|Salam}')" class="px-2 py-0.5 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-semibold transition">+ Spintax</button>
+                                    <button type="button" onclick="insertEditTag('[Time]')" class="px-2 py-0.5 rounded bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold transition">+ [Time]</button>
+                                    <button type="button" onclick="insertEditTag('[Date]')" class="px-2 py-0.5 rounded bg-teal-100 hover:bg-teal-200 text-teal-800 font-semibold transition">+ [Date]</button>
+                                    <button type="button" onclick="insertEditTag('[UniqueId]')" class="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold transition">+ [UniqueId]</button>
                                 </div>
                             </div>
 

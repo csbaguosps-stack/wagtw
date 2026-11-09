@@ -2039,18 +2039,118 @@ app.post('/api/send', authMiddleware, async (req, res) => {
 });
 
 // ─── Broadcast & Anti-Banned Engine ──────────────────────────────────────────
+
+/**
+ * Menghasilkan teks spintax rekursif: {Halo|Hai|Salam {pagi|siang}}
+ */
 function parseSpintax(text) {
-    let matches, options, random;
-    const regEx = new RegExp(/{([^}]+)}/);
-    while((matches = regEx.exec(text)) !== null) {
-        options = matches[1].split('|');
-        random = Math.floor(Math.random() * options.length);
+    if (!text) return '';
+    const regEx = /\{([^{}]+)\}/;
+    let matches;
+    let iterations = 0;
+    while ((matches = regEx.exec(text)) !== null && iterations < 15) {
+        const options = matches[1].split('|');
+        const random = Math.floor(Math.random() * options.length);
         text = text.replace(matches[0], options[random]);
+        iterations++;
     }
     return text;
 }
 
-const activeCampaignsLocks = {}; // Mencegah double send pada async loop
+/**
+ * Salam waktu lokal otomatis (WIB UTC+7)
+ */
+function getDynamicGreeting() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const localTime = new Date(utc + (3600000 * 7));
+    const hour = localTime.getHours();
+
+    if (hour >= 4 && hour < 11) return 'Selamat pagi';
+    if (hour >= 11 && hour < 15) return 'Selamat siang';
+    if (hour >= 15 && hour < 18) return 'Selamat sore';
+    return 'Selamat malam';
+}
+
+/**
+ * Informasi tanggal dan waktu lokal terformat
+ */
+function getFormattedDateInfo() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const local = new Date(utc + (3600000 * 7));
+
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+    const dayName = days[local.getDay()];
+    const dateNum = String(local.getDate()).padStart(2, '0');
+    const monthName = months[local.getMonth()];
+    const yearNum = local.getFullYear();
+    const hours = String(local.getHours()).padStart(2, '0');
+    const mins = String(local.getMinutes()).padStart(2, '0');
+
+    return {
+        day: dayName,
+        date: `${dateNum} ${monthName} ${yearNum}`,
+        dateShort: `${dateNum}/${String(local.getMonth() + 1).padStart(2, '0')}/${yearNum}`,
+        time: `${hours}:${mins}`
+    };
+}
+
+/**
+ * Hasilkan kode unik acak untuk tag [UniqueId]
+ */
+function generateRandomTag(length = 5) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let res = '';
+    for (let i = 0; i < length; i++) {
+        res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+}
+
+/**
+ * Injeksi karakter Zero-Width tak terlihat pada akhir pesan.
+ * Trik Anti-Banned: Pesan tampak sama persis di layar HP penerima,
+ * tetapi memiliki Hash kriptografis unik (MD5/SHA256) di server Meta,
+ * sehingga sistem AI spam Meta TIDAK mendeteksi pesan massal duplikat.
+ */
+function injectInvisibleAntiHash(text) {
+    const zwChars = ['\u200B', '\u200C', '\u200D', '\uFEFF'];
+    const length = Math.floor(Math.random() * 5) + 4; // 4 s/d 8 karakter tak terlihat
+    let watermark = '';
+    for (let i = 0; i < length; i++) {
+        watermark += zwChars[Math.floor(Math.random() * zwChars.length)];
+    }
+    return text + watermark;
+}
+
+/**
+ * Format pesan broadcast lengkap dengan Spintax, Variabel Dinamis & Watermark Anti-Hash
+ */
+function formatBroadcastMessage(rawMessage, targetName, targetPhone) {
+    let msg = parseSpintax(rawMessage || '');
+    const greeting = getDynamicGreeting();
+    const dateInfo = getFormattedDateInfo();
+    const uniqueId = generateRandomTag(5);
+
+    msg = msg.replace(/\[Name\]/gi, targetName || 'Kak');
+    msg = msg.replace(/\[Phone\]/gi, targetPhone || '');
+    msg = msg.replace(/\[(Greeting|Salam)\]/gi, greeting);
+    msg = msg.replace(/\[(Date|Tanggal)\]/gi, dateInfo.date);
+    msg = msg.replace(/\[(Time|Waktu|Jam)\]/gi, dateInfo.time);
+    msg = msg.replace(/\[(Day|Hari)\]/gi, dateInfo.day);
+    msg = msg.replace(/\[(UniqueId|Unique|Random|Ref|Kode)\]/gi, uniqueId);
+
+    // Selipkan watermark tak terlihat (Anti-Duplicate Content Ban)
+    return injectInvisibleAntiHash(msg);
+}
+
+const activeCampaignsLocks = {}; // Mencegah double send pada async loop campaign
+const activeDeviceLocks    = {}; // Mencegah bentrok 2 campaign berjalan di 1 device
+const campaignBatchState   = {}; // Manajemen jeda istirahat berkala (batch pacing)
+const consecutiveFailures  = {}; // Circuit breaker jika banyak nomor invalid berurutan
 
 async function processBroadcasts() {
     try {
@@ -2058,12 +2158,33 @@ async function processBroadcasts() {
         if (!campaigns.length) return;
 
         for (const c of campaigns) {
-            if (activeCampaignsLocks[c.id]) continue; // Sedang ada proses delay berjalan untuk campaign ini
+            // 1. Kunci campaign jika sedang ada delay / pengiriman aktif
+            if (activeCampaignsLocks[c.id]) continue;
+
+            // 2. Kunci device jika nomor WA ini sedang digunakan broadcast lain (hindari interleave simultan)
+            if (activeDeviceLocks[c.session_id]) continue;
 
             const sockData = sessions[c.session_id];
             if (!sockData || sockData.status !== 'connected') continue; // Skip jika device offline
 
+            // 3. Cek Masa Istirahat Batch Pacing (Anti-Banned Cooling Period)
+            const batchState = campaignBatchState[c.id] || { sentSinceLastBatch: 0, pausedUntil: 0 };
+            campaignBatchState[c.id] = batchState;
+
+            const now = Date.now();
+            if (batchState.pausedUntil && now < batchState.pausedUntil) {
+                const remainingSecs = Math.ceil((batchState.pausedUntil - now) / 1000);
+                const remainingMins = Math.ceil(remainingSecs / 60);
+                if (!batchState.lastLog || now - batchState.lastLog > 60000) {
+                    console.log(`[BATCH PACING] Campaign #${c.id} (${c.name}): Sedang masa istirahat anti-banned. Melanjutkan dalam ~${remainingMins} menit (${remainingSecs}s)...`);
+                    batchState.lastLog = now;
+                }
+                continue;
+            }
+
+            // Kunci proses untuk campaign & device ini
             activeCampaignsLocks[c.id] = true;
+            activeDeviceLocks[c.session_id] = true;
 
             try {
                 // Ambil 1 baris target pending
@@ -2074,7 +2195,11 @@ async function processBroadcasts() {
                     const s = stats[0] || { sent: 0, failed: 0, total: 0 };
                     const finalStatus = (s.sent === 0 && s.failed > 0) ? 'failed' : 'done';
                     await dbQuery("UPDATE campaigns SET status = ?, finished_at = NOW() WHERE id = ?", [finalStatus, c.id]);
+                    
                     delete activeCampaignsLocks[c.id];
+                    delete activeDeviceLocks[c.session_id];
+                    delete campaignBatchState[c.id];
+                    delete consecutiveFailures[c.id];
                     continue;
                 }
 
@@ -2085,14 +2210,16 @@ async function processBroadcasts() {
                 }
                 const jid = toNumber + '@s.whatsapp.net';
 
-                // Terapkan Anti-Banned: Spintax & Nama Variabel
-                let finalMsg = parseSpintax(c.message);
-                finalMsg = finalMsg.replace(/\[Name\]/gi, target.name || 'Kak');
+                // Terapkan Anti-Banned: Spintax, Variabel Dinamis & Watermark Anti-Hash
+                const finalMsg = formatBroadcastMessage(c.message, target.name, toNumber);
 
-                // Terapkan Anti-Banned: Kalkulasi Delay Acak
-                const delayMin = c.delay_min > 0 ? c.delay_min : 5;
-                const delayMax = c.delay_max >= delayMin ? c.delay_max : delayMin + 5;
-                const delayMs = Math.floor(Math.random() * (delayMax - delayMin + 1) + delayMin) * 1000;
+                // Terapkan Anti-Banned: Kalkulasi Delay Acak yang Aman
+                // Cegah delay terlalu cepat (minimal 8 detik untuk menjaga kesehatan akun)
+                const rawDelayMin = c.delay_min > 0 ? c.delay_min : 10;
+                const rawDelayMax = c.delay_max >= rawDelayMin ? c.delay_max : rawDelayMin + 10;
+                const safeDelayMin = Math.max(8, rawDelayMin);
+                const safeDelayMax = Math.max(safeDelayMin + 4, rawDelayMax);
+                const delayMs = Math.floor(Math.random() * (safeDelayMax - safeDelayMin + 1) + safeDelayMin) * 1000;
 
                 // Gunakan setTimeout non-blocking
                 setTimeout(async () => {
@@ -2119,8 +2246,12 @@ async function processBroadcasts() {
                             throw new Error('Nomor tidak terdaftar di WhatsApp');
                         }
 
-                        // Simulasikan mengetik agar terlihat natural
+                        // 3. Simulasikan Status Mengetik Manusiawi (Humanized Typing Simulation)
+                        // Bot yang mengirim pesan instan 0ms langsung ditandai oleh Meta.
+                        // Di sini kita simulasikan 'composing' 2.5 - 6 detik sesuai panjang teks.
                         await sockData.socket.sendPresenceUpdate('composing', targetJid).catch(() => {});
+                        const typingDurationMs = Math.min(6000, Math.max(2500, Math.floor(finalMsg.length * 25 + (Math.random() * 1500 + 1000))));
+                        await new Promise(r => setTimeout(r, typingDurationMs));
 
                         let sentMsg = null;
                         let msgType = 'text';
@@ -2159,6 +2290,9 @@ async function processBroadcasts() {
                         if (!sentMsg) {
                             sentMsg = await sockData.socket.sendMessage(targetJid, { text: finalMsg });
                         }
+
+                        // Selesai mengetik: matikan presence
+                        await sockData.socket.sendPresenceUpdate('paused', targetJid).catch(() => {});
                         
                         await dbQuery("UPDATE campaign_recipients SET status = 'sent', sent_at = NOW(), error_msg = NULL WHERE id = ?", [target.id]);
                         await dbQuery("UPDATE campaigns SET sent = sent + 1 WHERE id = ?", [c.id]);
@@ -2167,20 +2301,47 @@ async function processBroadcasts() {
                         markBotSentMessage(waMsgId);
                         await saveMessageToDB(c.session_id, waMsgId, sockData.phone, toNumber, msgType, finalMsg, 'out', 'sent');
                         
-                        console.log(`[BROADCAST SUKSES] Camp #${c.id} -> +${toNumber} (Delay: ${delayMs/1000}s)`);
+                        console.log(`[BROADCAST SUKSES] Camp #${c.id} -> +${toNumber} (Delay: ${delayMs/1000}s, Ketik: ${typingDurationMs/1000}s)`);
+
+                        // Reset circuit breaker pada keberhasilan
+                        consecutiveFailures[c.id] = 0;
+
+                        // 4. Manajemen Batch Pacing (Istirahat Berkala Anti-Banned)
+                        batchState.sentSinceLastBatch = (batchState.sentSinceLastBatch || 0) + 1;
+                        const batchSendLimit = c.batch_send > 0 ? c.batch_send : 25; // default aman 25 pesan jika 0
+                        const batchSleepMins = c.batch_sleep > 0 ? c.batch_sleep : (c.batch_send > 0 ? 5 : 2); // default jeda 2-5 menit
+
+                        if (batchState.sentSinceLastBatch >= batchSendLimit) {
+                            const pauseMs = batchSleepMins * 60 * 1000;
+                            batchState.pausedUntil = Date.now() + pauseMs;
+                            batchState.sentSinceLastBatch = 0;
+                            const resumeTime = new Date(batchState.pausedUntil).toLocaleTimeString('id-ID');
+                            console.log(`\n💤 [ANTI-BAN BATCH PACING] Camp #${c.id} (${c.name}): Telah mengirim ${batchSendLimit} pesan berturut-turut. Mengambil istirahat ${batchSleepMins} menit (lanjut pk ${resumeTime}) agar akun aman.`);
+                        }
+
                     } catch (e) {
                         const errMsg = (e.message || 'Gagal mengirim pesan').substring(0, 200);
                         await dbQuery("UPDATE campaign_recipients SET status = 'failed', error_msg = ? WHERE id = ?", [errMsg, target.id]);
                         await dbQuery("UPDATE campaigns SET failed = failed + 1 WHERE id = ?", [c.id]);
                         console.error(`[BROADCAST GAGAL] Camp #${c.id} -> +${toNumber}: ${errMsg}`);
+
+                        // Circuit Breaker: Jika banyak nomor invalid berurutan, tunda sementara
+                        consecutiveFailures[c.id] = (consecutiveFailures[c.id] || 0) + 1;
+                        if (consecutiveFailures[c.id] >= 4) {
+                            console.warn(`⚠️ [CIRCUIT BREAKER] Camp #${c.id}: ${consecutiveFailures[c.id]} nomor gagal berurutan. Mengambil cooling-off 45 detik untuk mencegah flag spam kontak invalid.`);
+                            batchState.pausedUntil = Date.now() + 45000;
+                            consecutiveFailures[c.id] = 0;
+                        }
                     } finally {
-                        delete activeCampaignsLocks[c.id]; // Buka kunci agar bisa melanjut target berikutnya di tick loop dtk depan
+                        delete activeCampaignsLocks[c.id]; // Buka kunci campaign
+                        delete activeDeviceLocks[c.session_id]; // Buka kunci device
                     }
                 }, delayMs);
 
             } catch (err) {
                 console.log('[BROADCAST PROC ERR]', err.message);
                 delete activeCampaignsLocks[c.id];
+                delete activeDeviceLocks[c.session_id];
             }
         }
     } catch (err) {

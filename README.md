@@ -267,12 +267,12 @@ sudo npm install -g pm2
    - Tulis instruksi prompt bisnis Anda.
 2. Aktifkan fitur **Web Search** jika ingin AI mencari info harga atau berita terbaru secara otomatis dari Google, Bing, atau DuckDuckGo.
 
-### 4. Kirim Pesan Massal (Broadcast Campaign)
+### 4. Kirim Pesan Massal (Broadcast Campaign dengan Perlindungan Anti-Banned)
 1. Buka menu **Broadcast** > **Buat Broadcast**.
 2. Download template CSV/Excel yang tersedia, isi daftar nomor tujuan, lalu upload kembali.
-3. Tulis pesan dengan variabel personalisasi (misal: `Halo {name}, promo hari ini...`).
-4. Atur jeda aman (minimal 5–15 detik) untuk melindungi nomor dari pembatasan WhatsApp.
-5. Klik **Mulai Pengiriman**.
+3. Tulis pesan dengan tag dinamis (`[Name]`, `[Salam]`, `[Time]`, `[Date]`, `[UniqueId]`) dan variasi Spintax `{Hai|Halo|Salam}`.
+4. Tentukan rentang jeda aman (minimal 8–25 detik) dan fitur **Batch Pacing** (contoh: kirim 20 pesan, lalu istirahat 5 menit).
+5. Klik **Mulai Pengiriman**. Engine akan menyimulasikan status mengetik manusiawi dan menyuntikkan watermark anti-hash otomatis pada tiap pesan.
 
 ---
 
@@ -297,12 +297,16 @@ sudo npm install -g pm2
 
 ---
 
-## 🔒 Tips Keamanan & Anti-Banned WhatsApp
+## 🔒 Tips Keamanan & Fitur Perlindungan Anti-Banned WhatsApp
 
-1. **Jeda Pengiriman (Delay Dinamis)**: Selalu beri jeda minimal 5–15 detik per pesan pada pengiriman broadcast.
-2. **Warming Up Nomor Baru**: Nomor WhatsApp baru jangan langsung digunakan untuk blast ribuan pesan. Naikkan volume secara bertahap dalam 1–2 minggu pertama.
-3. **Penyimpanan Kredensial**: File `.env` dan folder sesi `server/.sessions/` memuat token login. Jangan pernah mempublikasikannya ke repositori GitHub publik.
-4. **Izin File di Hosting**: Set izin hak akses file `server/.env` ke `600` atau `640` di File Manager hosting.
+Sistem WAGTW telah dilengkapi arsitektur perlindungan anti-banned berlapis:
+
+1. **Anti-Duplicate Content Ban (Injeksi Zero-Width Watermark)**: Engine otomatis menyisipkan karakter zero-width tak terlihat pada setiap pesan terkirim. Pesan tampak sama persis di HP penerima, namun memiliki hash SHA-256 unik yang mengelabui filter deteksi spam massal Meta.
+2. **Simulasi Mengetik Manusiawi (Humanized Typing Presence)**: Sebelum mengirim pesan, sistem mengaktifkan status *"sedang mengetik..."* selama 2.5–6 detik secara adaptif sesuai panjang teks, meniru perilaku manusia asli.
+3. **Batch Pacing (Istirahat Berkala)**: Mengirim non-stop adalah pemicu utama pemblokiran akun. Gunakan fitur batch pacing (misal: kirim 20 pesan, lalu istirahat 5–10 menit) untuk mendinginkan reputasi akun WhatsApp.
+4. **Jeda Pengiriman Aman (Delay Minimum Terproteksi)**: Engine mengunci delay pengiriman minimal 8 detik ke atas dengan jitter acak agar ritme pesan tidak seragam seperti robot.
+5. **Circuit Breaker Nomor Invalid**: Jika terjadi beberapa kegagalan nomor tak terdaftar beruntun, engine otomatis mengambil jeda pendinginan (cooling-off) agar tidak terindikasi sebagai bot scraping.
+6. **Warming Up Nomor Baru**: Nomor WhatsApp baru jangan langsung digunakan untuk blast ribuan pesan. Naikkan volume secara bertahap dalam 1–2 minggu pertama.
 
 ---
 

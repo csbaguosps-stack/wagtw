@@ -113,8 +113,20 @@
                             <button type="button" onclick="window.insertMessageTag('[Name]')" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 active:bg-blue-300 text-blue-800 text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer select-none" title="Sebut Nama Otomatis">
                                 <span>+ [Name]</span>
                             </button>
+                            <button type="button" onclick="window.insertMessageTag('[Salam]')" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 text-emerald-800 text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer select-none" title="Salam Dinamis (Pagi/Siang/Sore/Malam)">
+                                <span>+ [Salam]</span>
+                            </button>
                             <button type="button" onclick="window.insertMessageTag('{Hai|Halo|Salam}')" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-indigo-100 hover:bg-indigo-200 active:bg-indigo-300 text-indigo-800 text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer select-none" title="Acak Kata Spintax">
                                 <span>+ Spintax</span>
+                            </button>
+                            <button type="button" onclick="window.insertMessageTag('[Time]')" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 active:bg-purple-300 text-purple-800 text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer select-none" title="Waktu / Jam Kirim">
+                                <span>+ [Time]</span>
+                            </button>
+                            <button type="button" onclick="window.insertMessageTag('[Date]')" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-teal-100 hover:bg-teal-200 active:bg-teal-300 text-teal-800 text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer select-none" title="Tanggal Kirim">
+                                <span>+ [Date]</span>
+                            </button>
+                            <button type="button" onclick="window.insertMessageTag('[UniqueId]')" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-800 text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer select-none" title="Kode Unik Acak Anti-Duplicate">
+                                <span>+ [UniqueId]</span>
                             </button>
                             
                             <span class="text-slate-300 mx-0.5 hidden sm:inline">|</span>
@@ -236,11 +248,18 @@
                                 <span class="text-[11px] text-slate-400">Variabel <code>[Name]</code> otomatis disesuaikan per kontak</span>
                             </div>
 
-                            <div class="bg-blue-50/70 rounded-xl p-2.5 sm:p-3 mt-2 border border-blue-100">
-                                <p class="text-[11px] font-bold text-blue-800 mb-0.5">PANDUAN ANTI-BANNED:</p>
-                                <ul class="text-[11px] sm:text-xs text-blue-700 list-disc list-inside space-y-0.5">
-                                    <li>Sebut nama dinamis: <code class="bg-blue-100/80 px-1 rounded font-bold">[Name]</code></li>
-                                    <li>Spintax acak kata: <code class="bg-blue-100/80 px-1 rounded font-bold">{Hai|Halo|Salam}</code></li>
+                            <div class="bg-gradient-to-r from-blue-50/90 to-indigo-50/90 rounded-2xl p-3 sm:p-3.5 mt-2.5 border border-blue-200/80 shadow-2xs">
+                                <div class="flex items-center gap-1.5 font-bold text-blue-900 text-xs mb-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span>SISTEM PERLINDUNGAN ANTI-BANNED AKTIF:</span>
+                                </div>
+                                <ul class="text-[11px] sm:text-xs text-blue-800 space-y-1 leading-relaxed">
+                                    <li>🛡️ <b>Variasi Salam & Waktu:</b> Sisipkan tag <code class="bg-blue-100/80 text-blue-900 px-1 py-0.5 rounded font-mono font-bold">[Salam]</code>, <code class="bg-blue-100/80 text-blue-900 px-1 py-0.5 rounded font-mono font-bold">[Time]</code>, <code class="bg-blue-100/80 text-blue-900 px-1 py-0.5 rounded font-mono font-bold">[Date]</code>.</li>
+                                    <li>🛡️ <b>Panggilan Personal:</b> Gunakan <code class="bg-blue-100/80 text-blue-900 px-1 py-0.5 rounded font-mono font-bold">[Name]</code> agar pesan terasa personal dan tidak dianggap spam robot.</li>
+                                    <li>🛡️ <b>Spintax Acak Kata:</b> Gunakan <code class="bg-blue-100/80 text-blue-900 px-1 py-0.5 rounded font-mono font-bold">{Hai|Halo|Salam}</code> agar variasi kalimat selalu berbeda.</li>
+                                    <li>🛡️ <b>Anti-Duplicate Content Ban (Otomatis):</b> Engine otomatis menyuntikkan watermark tak terlihat (Zero-Width) pada tiap pesan sehingga SHA-256 hash pesan selalu unik di mata filter Meta.</li>
+                                    <li>🛡️ <b>Simulasi Mengetik Manusiawi (Otomatis):</b> Engine menyimulasikan status <i>"sedang mengetik..."</i> selama 2.5 - 6 detik sebelum mengirim pesan.</li>
+                                    <li>🛡️ <b>Batch Pacing (Istirahat Berkala):</b> Engine otomatis istirahat berkala untuk mendinginkan nomor WA Anda.</li>
                                 </ul>
                             </div>
                         </div>
@@ -699,6 +718,32 @@ window.updateWhatsAppPreview = function() {
         } else {
             let processed = window.resolveSpintax(rawMessage, window.spintaxSeed);
             processed = processed.replace(/\[Name\]/gi, currentTarget.name);
+            processed = processed.replace(/\[Phone\]/gi, currentTarget.phone);
+
+            // Salam Dinamis Sesuai Jam
+            const now = new Date();
+            const hour = now.getHours();
+            let greeting = 'Selamat pagi';
+            if (hour >= 11 && hour < 15) greeting = 'Selamat siang';
+            else if (hour >= 15 && hour < 18) greeting = 'Selamat sore';
+            else if (hour >= 18 || hour < 4) greeting = 'Selamat malam';
+
+            processed = processed.replace(/\[(Greeting|Salam)\]/gi, greeting);
+
+            // Tanggal, Hari & Jam
+            const dayNames = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+            const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+            const formattedDate = String(now.getDate()).padStart(2,'0') + ' ' + monthNames[now.getMonth()] + ' ' + now.getFullYear();
+            const formattedTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+            processed = processed.replace(/\[(Date|Tanggal)\]/gi, formattedDate);
+            processed = processed.replace(/\[(Time|Waktu|Jam)\]/gi, formattedTime);
+            processed = processed.replace(/\[(Day|Hari)\]/gi, dayNames[now.getDay()]);
+
+            // Kode Acak Unik Simulasi
+            const simulatedRef = '#REF' + Math.floor(1000 + (window.spintaxSeed || 0.42) * 9000);
+            processed = processed.replace(/\[(UniqueId|Unique|Random|Ref|Kode)\]/gi, simulatedRef);
+
             previewTextEl.innerHTML = window.parseWhatsAppMarkdown(processed);
         }
     }
