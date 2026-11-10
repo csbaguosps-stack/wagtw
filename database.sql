@@ -189,6 +189,18 @@ CREATE TABLE IF NOT EXISTS `campaign_recipients` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ──────────────────────────────────────────────────────────────
+-- 7b. TABLE BROADCAST BLACKLISTS (OPT-OUT)
+-- ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `broadcast_blacklists` (
+    `id`         INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `phone`      VARCHAR(50)      NOT NULL,
+    `reason`     VARCHAR(255)     DEFAULT 'Opt-out (Balas STOP)',
+    `created_at` DATETIME         DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `unique_blacklist_phone` (`phone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ──────────────────────────────────────────────────────────────
 -- 8. TABEL CONTACTS
 -- ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS `contacts` (

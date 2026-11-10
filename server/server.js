@@ -10,13 +10,13 @@
 
 require('dotenv').config();
 
-const express    = require('express');
-const cors       = require('cors');
-const mysql      = require('mysql2/promise');
-const qrcode     = require('qrcode');
-const path       = require('path');
-const fs         = require('fs');
-const pino       = require('pino');
+const express = require('express');
+const cors = require('cors');
+const mysql = require('mysql2/promise');
+const qrcode = require('qrcode');
+const path = require('path');
+const fs = require('fs');
+const pino = require('pino');
 
 // ─── Baileys v7 Imports ───────────────────────────────────────────────────────
 const {
@@ -109,12 +109,12 @@ function makeInMemoryStore() {
                     if (data && data.contacts) Object.assign(contacts, data.contacts);
                     if (data && data.messages) Object.assign(messages, data.messages);
                 }
-            } catch (_) {}
+            } catch (_) { }
         },
         writeToFile: (filePath) => {
             try {
                 fs.writeFileSync(filePath, JSON.stringify({ chats, contacts, messages }, null, 2));
-            } catch (_) {}
+            } catch (_) { }
         }
     };
 }
@@ -128,10 +128,10 @@ process.on('uncaughtException', (err) => {
 });
 
 // ─── App Config ───────────────────────────────────────────────────────────────
-const app        = express();
-const PORT       = process.env.PORT || process.env.WA_ENGINE_PORT || 3001;
-const API_TOKEN  = process.env.API_SECRET_TOKEN || 'wagtw_secret_token_2024';
-const AUTH_DIR   = path.join(__dirname, '.sessions');
+const app = express();
+const PORT = process.env.PORT || process.env.WA_ENGINE_PORT || 3001;
+const API_TOKEN = process.env.API_SECRET_TOKEN || 'wagtw_secret_token_2024';
+const AUTH_DIR = path.join(__dirname, '.sessions');
 
 // Pastikan folder sesi tersedia
 if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
@@ -183,20 +183,20 @@ async function authMiddleware(req, res, next) {
             }
             return next();
         }
-    } catch (e) {}
+    } catch (e) { }
 
     return res.status(403).json({ status: 'error', message: 'Unauthorized - Token tidak valid.' });
 }
 
 // ─── Database Pool ────────────────────────────────────────────────────────────
 let db = mysql.createPool({
-    host:               process.env.DB_HOST || 'localhost',
-    user:               process.env.DB_USER || 'root',
-    password:           process.env.DB_PASS || '',
-    database:           process.env.DB_NAME || 'wagtw',
-    charset:            'utf8mb4',
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASS || '',
+    database: process.env.DB_NAME || 'wagtw',
+    charset: 'utf8mb4',
     waitForConnections: true,
-    connectionLimit:    10,
+    connectionLimit: 10,
 });
 
 // Auto-test and fallback to local root if hosting credentials are configured in .env but server runs locally
@@ -268,7 +268,7 @@ async function saveMessageToDB(sessionId, waMsgId, fromPhone, toPhone, msgType, 
         const devices = await dbQuery('SELECT id, user_id FROM devices WHERE session_id = ? LIMIT 1', [sessionId]);
         if (!devices.length) return;
         const device = devices[0];
-        
+
         await dbQuery(
             `INSERT INTO messages (user_id, device_id, wa_msg_id, from_phone, to_phone, msg_type, message, direction, status, created_at) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
@@ -302,12 +302,12 @@ async function dispatchWebhook(sessionId, senderJid, incomingText, fullMsg) {
         const timestamp = Math.floor(Date.now() / 1000);
 
         const payload = {
-            event:     'message',
-            device:    myPhone,
-            sender:    remotePhone,
-            message:   incomingText || '',
-            name:      senderName,
-            is_group:  isGroup,
+            event: 'message',
+            device: myPhone,
+            sender: remotePhone,
+            message: incomingText || '',
+            name: senderName,
+            is_group: isGroup,
             timestamp: timestamp,
             wa_msg_id: fullMsg.key?.id || null
         };
@@ -481,7 +481,7 @@ async function unmuteContact(deviceId, phone, rawJid = null) {
         if (rawJid) {
             const altPhone = normalizePhoneFromJid(rawJid);
             if (altPhone && altPhone !== phone) {
-                await dbQuery('DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone = ?', [deviceId, altPhone]).catch(() => {});
+                await dbQuery('DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone = ?', [deviceId, altPhone]).catch(() => { });
             }
         }
 
@@ -496,7 +496,7 @@ async function unmuteContact(deviceId, phone, rawJid = null) {
         if (Array.isArray(related)) {
             for (const r of related) {
                 if (r.num && r.num.length >= 5 && r.num !== phone) {
-                    await dbQuery('DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone = ?', [deviceId, r.num]).catch(() => {});
+                    await dbQuery('DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone = ?', [deviceId, r.num]).catch(() => { });
                 }
             }
         }
@@ -560,10 +560,10 @@ function isEndConversationKeyword(text, keywordSetting) {
 
     // Default fallback esensial yang selalu aktif
     const defaultFallbacks = [
-        'akhiri percakapan', 'akhiri chat', 'akhiri sesi', 'akhiri', 
-        'selesai percakapan', 'selesai chat', 'selesai', 
+        'akhiri percakapan', 'akhiri chat', 'akhiri sesi', 'akhiri',
+        'selesai percakapan', 'selesai chat', 'selesai',
         '#akhiri', '#selesai', '!akhiri', '!selesai', '/selesai', '/akhiri',
-        'tutup sesi', 'tutup percakapan', 'tutup chat', 
+        'tutup sesi', 'tutup percakapan', 'tutup chat',
         'end chat', 'end conversation', 'close chat', 'close session'
     ];
     for (const def of defaultFallbacks) {
@@ -652,7 +652,7 @@ async function isContactMuted(deviceId, phone) {
             const until = new Date(row.muted_until);
             if (now >= until) {
                 console.log(`[AI MUTE EXPIRED] Kontak ${phone} masa mute telah berakhir (${row.muted_until}). Mengaktifkan Bot AI kembali.`);
-                await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => {});
+                await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => { });
                 return false;
             }
             return true;
@@ -669,7 +669,7 @@ async function isContactMuted(deviceId, phone) {
         if (rowDateStr === todayStr) {
             return true;
         } else {
-            await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => {});
+            await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => { });
             return false;
         }
     } catch (e) {
@@ -747,7 +747,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
     if (!devices.length) return;
 
     const deviceId = devices[0].id;
-    const userId   = devices[0].user_id;
+    const userId = devices[0].user_id;
 
     const session = sessions[sessionId];
     if (!session?.socket || session.status !== 'connected') return;
@@ -765,7 +765,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
 
     const aiConfig = aiSettings.length ? aiSettings[0] : null;
     const isAiEnabled = !!(aiConfig && (aiConfig.ai_enabled == 1 || aiConfig.ai_enabled === true || aiConfig.ai_enabled === '1'));
-    
+
     // Cek Target Balasan (Pribadi/Grup)
     const targetReply = aiConfig ? (aiConfig.target_reply || 'both') : 'both';
     const isGroup = senderJid.endsWith('@g.us');
@@ -831,7 +831,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
     // ── WHATSAPP BUSINESS FEATURES (Welcome & Away) ──────────────────────────
     if (!isGroup) {
         const devData = devices[0];
-        
+
         // 1. Welcome Message
         if (devData.welcome_enabled == 1 && devData.welcome_message) {
             const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
@@ -843,7 +843,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                     const sentMsg = await sock.sendMessage(senderJid, { text: devData.welcome_message }, { quoted: fullMsg });
                     markBotSentMessage(sentMsg?.key?.id);
                 } catch (_) {
-                    const sentMsg = await sock.sendMessage(senderJid, { text: devData.welcome_message }).catch(() => {});
+                    const sentMsg = await sock.sendMessage(senderJid, { text: devData.welcome_message }).catch(() => { });
                     markBotSentMessage(sentMsg?.key?.id);
                 }
             }
@@ -856,11 +856,11 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                 const wibOffset = 7 * 60; // WIB
                 const nowUtc = new Date();
                 const nowWib = new Date(nowUtc.getTime() + wibOffset * 60 * 1000);
-                
+
                 const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
                 const currentDay = days[nowWib.getUTCDay()];
                 const todaySchedule = wh[currentDay];
-                
+
                 let isAway = false;
                 if (todaySchedule && todaySchedule.is_off) {
                     isAway = true;
@@ -868,12 +868,12 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                     const jamWib = nowWib.getUTCHours();
                     const menitWib = nowWib.getUTCMinutes();
                     const currentMinutes = jamWib * 60 + menitWib;
-                    
+
                     const [startH, startM] = todaySchedule.start.split(':').map(Number);
                     const [endH, endM] = todaySchedule.end.split(':').map(Number);
                     const startMinutes = startH * 60 + startM;
                     const endMinutes = endH * 60 + endM;
-                    
+
                     if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
                         isAway = true;
                     }
@@ -883,14 +883,14 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                     // Anti-spam: Cek apakah sudah pernah kirim away message dalam 12 jam terakhir
                     const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
                     const recentAway = await dbQuery(`SELECT id FROM messages WHERE from_phone = ? AND to_phone = ? AND direction = 'out' AND message = ? AND created_at > ? LIMIT 1`, [myPhone, remotePhone, devData.away_message, twelveHoursAgo]);
-                    
+
                     if (recentAway.length === 0) {
                         console.log(`[BUSINESS] Mengirim Away Message ke ${remotePhone}`);
                         try {
                             const sentMsg = await sock.sendMessage(senderJid, { text: devData.away_message }, { quoted: fullMsg });
                             markBotSentMessage(sentMsg?.key?.id);
                         } catch (_) {
-                            const sentMsg = await sock.sendMessage(senderJid, { text: devData.away_message }).catch(() => {});
+                            const sentMsg = await sock.sendMessage(senderJid, { text: devData.away_message }).catch(() => { });
                             markBotSentMessage(sentMsg?.key?.id);
                         }
                     }
@@ -917,19 +917,19 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
     for (const rule of rules) {
         // Cek filter target reply (both, private, group)
         const ruleTarget = rule.target_reply || 'both';
-        const matchChatType = (ruleTarget === 'both') || 
-                              (ruleTarget === 'private' && !isGroup) || 
-                              (ruleTarget === 'group' && isGroup);
+        const matchChatType = (ruleTarget === 'both') ||
+            (ruleTarget === 'private' && !isGroup) ||
+            (ruleTarget === 'group' && isGroup);
         if (!matchChatType) continue;
 
         const trigger = rule.trigger_word.toLowerCase();
         let matched = false;
 
         switch (rule.match_type) {
-            case 'exact':      matched = text === trigger; break;
+            case 'exact': matched = text === trigger; break;
             case 'startswith': matched = text.startsWith(trigger); break;
             case 'contains':
-            default:           matched = text.includes(trigger); break;
+            default: matched = text.includes(trigger); break;
         }
 
         if (matched) {
@@ -937,7 +937,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
             const delayMs = (rule.delay || 1) * 1000;
 
             if (rule.set_typing) {
-                await sock.sendPresenceUpdate('composing', senderJid).catch(() => {});
+                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
             }
 
             await new Promise(r => setTimeout(r, delayMs));
@@ -953,7 +953,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                 }
 
                 console.log(`[Autoreply] "${rule.trigger_word}" matched (${ruleTarget}) → kirim ke ${senderJid}`);
-                
+
                 // Simpan balasan manual autoreply ke histori DB
                 const waMsgId = sentMsg?.key?.id || null;
                 markBotSentMessage(waMsgId);
@@ -966,9 +966,9 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
     }
     if (keywordMatched) return;
 
-    const isTargetMatch = (targetReply === 'both') || 
-                          (targetReply === 'private' && !isGroup) || 
-                          (targetReply === 'group' && isGroup);
+    const isTargetMatch = (targetReply === 'both') ||
+        (targetReply === 'private' && !isGroup) ||
+        (targetReply === 'group' && isGroup);
 
     const replyMode = aiConfig ? (aiConfig.reply_mode || 'manual') : 'manual';
     const isAutoAi = (replyMode === 'auto' || replyMode === 'ai');
@@ -981,11 +981,11 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
         console.log(`[AI] Device ${deviceId} — Mode AI aktif, menghubungi Groq...`);
 
         // Tampilkan indikator mengetik selama AI berpikir
-        await sock.sendPresenceUpdate('composing', senderJid).catch(() => {});
+        await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
 
         // Ambil 8 pesan terakhir untuk context history dari Baileys Store
         const historyMsgs = session.store?.messages[senderJid]?.array?.slice(-8) || [];
-        
+
         let chatContext = historyMsgs.map(msg => {
             const isFromMe = msg.key.fromMe;
             const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
@@ -1023,16 +1023,16 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
         const nowUtc = new Date();
         const nowWib = new Date(nowUtc.getTime() + wibOffset * 60 * 1000);
 
-        const hariList = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-        const bulanList = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        const hariList = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const bulanList = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-        const hari   = hariList[nowWib.getUTCDay()];
-        const tgl    = nowWib.getUTCDate();
-        const bulan  = bulanList[nowWib.getUTCMonth()];
-        const tahun  = nowWib.getUTCFullYear();
-        const jam    = String(nowWib.getUTCHours()).padStart(2, '0');
-        const menit  = String(nowWib.getUTCMinutes()).padStart(2, '0');
-        const detik  = String(nowWib.getUTCSeconds()).padStart(2, '0');
+        const hari = hariList[nowWib.getUTCDay()];
+        const tgl = nowWib.getUTCDate();
+        const bulan = bulanList[nowWib.getUTCMonth()];
+        const tahun = nowWib.getUTCFullYear();
+        const jam = String(nowWib.getUTCHours()).padStart(2, '0');
+        const menit = String(nowWib.getUTCMinutes()).padStart(2, '0');
+        const detik = String(nowWib.getUTCSeconds()).padStart(2, '0');
 
         const waktuWib = `${hari}, ${tgl} ${bulan} ${tahun} pukul ${jam}:${menit}:${detik} WIB`;
         sysPrompt = `[Waktu saat ini: ${waktuWib}]
@@ -1146,8 +1146,8 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
             }
 
             // Hentikan status mengetik
-            await sock.sendPresenceUpdate('paused', senderJid).catch(() => {});
-            
+            await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+
             try {
                 let sentMsg = null;
 
@@ -1158,7 +1158,7 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                     console.warn(`[AI Quoted Error] ${quotedErr.message}, mencoba kirim pesan langsung tanpa quote...`);
                     sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
                 }
-                
+
                 const waMsgId = sentMsg?.key?.id || null;
                 markBotSentMessage(waMsgId);
                 console.log(`[AI] Balasan Groq teks berhasil terkirim ke ${senderJid}`);
@@ -1170,7 +1170,7 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
             }
             return; // Selesai, jangan lanjut ke autoreply biasa
         } else {
-            await sock.sendPresenceUpdate('paused', senderJid).catch(() => {});
+            await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
             console.warn('[AI] Semua server Groq gagal, fallback ke autoreply keyword...');
         }
     }
@@ -1213,21 +1213,21 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
         try {
             oldSock.ev.removeAllListeners();
             oldSock.end(undefined);
-        } catch (_) {}
+        } catch (_) { }
     }
 
     const existingRetries = sessions[sessionId]?.retries || 0;
     sessions[sessionId] = {
-        socket:            null,
-        qrBase64:          null,
-        pairingCode:       null,
-        status:            'initializing',
-        phone:             sessions[sessionId]?.phone || null,
-        retries:           isRetry ? existingRetries : 0,
-        store:             null,
-        storeInterval:     null,
+        socket: null,
+        qrBase64: null,
+        pairingCode: null,
+        status: 'initializing',
+        phone: sessions[sessionId]?.phone || null,
+        retries: isRetry ? existingRetries : 0,
+        store: null,
+        storeInterval: null,
         heartbeatInterval: null,
-        reconnectTimeout:  null
+        reconnectTimeout: null
     };
 
     await updateDeviceStatus(sessionId, 'initializing');
@@ -1256,17 +1256,17 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
         if (fs.existsSync(storePath)) {
             store.readFromFile(storePath);
         }
-    } catch (e) {}
+    } catch (e) { }
 
     const sock = makeWASocket({
         version,
-        logger:           baileysLogger,
-        auth:             state,
+        logger: baileysLogger,
+        auth: state,
         printQRInTerminal: false,
-        // Gunakan Ubuntu Chrome signature — lebih kompatibel dengan WA Web protokol terbaru
-        // & delivery receipt (ceklis 2) bekerja lebih konsisten
-        browser:          Browsers.ubuntu('Chrome'),
-        syncFullHistory:  false,
+        // Use Windows Desktop signature to match the official WhatsApp desktop client on Windows.
+        // Avoids headless Linux scraper/bot fingerprints that are heavily monitored by Meta AI
+        browser: Browsers.windows('Desktop'),
+        syncFullHistory: false,
         generateHighQualityLinkPreview: false,
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
@@ -1288,9 +1288,9 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
 
     // Save store to file periodically
     const storeInterval = setInterval(() => {
-        try { 
-            if (fs.existsSync(sessionAuthDir)) store.writeToFile(storePath); 
-        } catch (e) {}
+        try {
+            if (fs.existsSync(sessionAuthDir)) store.writeToFile(storePath);
+        } catch (e) { }
     }, 15000);
 
     sessions[sessionId].socket = sock;
@@ -1317,7 +1317,7 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                     light: '#ffffff'
                 }
             });
-            sessions[sessionId].status   = 'qr';
+            sessions[sessionId].status = 'qr';
             await updateDeviceStatus(sessionId, 'qr');
         }
 
@@ -1344,7 +1344,7 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                     if (c?.me?.id || c?.registered) {
                         hasValidCreds = true;
                     }
-                } catch (_) {}
+                } catch (_) { }
             }
 
             // 1. RESTART REQUIRED (Code 515) atau HANDSHAKE PAIRING SUKSES (Code 428)
@@ -1365,13 +1365,13 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             // Hanya hapus folder sesi jika user benar-benar logout dari aplikasi WhatsApp di HP!
             if (statusCode === DisconnectReason.loggedOut) {
                 console.log(`[AUTH LOGGED OUT] Session ${sessionId}: Sesi di-logout dari WhatsApp (401). Menghapus auth.`);
-                try { fs.rmSync(sessionAuthDir, { recursive: true, force: true }); } catch(e) {}
+                try { fs.rmSync(sessionAuthDir, { recursive: true, force: true }); } catch (e) { }
 
-                sessions[sessionId].status   = 'disconnected';
+                sessions[sessionId].status = 'disconnected';
                 sessions[sessionId].qrBase64 = null;
                 sessions[sessionId].pairingCode = null;
-                sessions[sessionId].retries  = 0;
-                sessions[sessionId].socket   = null;
+                sessions[sessionId].retries = 0;
+                sessions[sessionId].socket = null;
                 await updateDeviceStatus(sessionId, 'disconnected');
                 return;
             }
@@ -1379,10 +1379,10 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             // 3. CONNECTION REPLACED (440)
             if (statusCode === DisconnectReason.connectionReplaced) {
                 console.log(`[REPLACED] Session ${sessionId}: Sesi dibuka di perangkat/browser lain.`);
-                sessions[sessionId].status   = 'disconnected';
+                sessions[sessionId].status = 'disconnected';
                 sessions[sessionId].qrBase64 = null;
                 sessions[sessionId].pairingCode = null;
-                sessions[sessionId].socket   = null;
+                sessions[sessionId].socket = null;
                 await updateDeviceStatus(sessionId, 'disconnected');
                 return;
             }
@@ -1390,20 +1390,20 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             // 4. TIMEOUT (408) HANYA JIKA BELUM TERDAFTAR (QR kadaluwarsa karena tidak di-scan)
             if (!hasValidCreds && (statusCode === DisconnectReason.timedOut || statusCode === 408)) {
                 console.log(`[TIMEOUT QR] Session ${sessionId}: QR Code kadaluwarsa karena tidak di-scan (408).`);
-                sessions[sessionId].status   = 'disconnected';
+                sessions[sessionId].status = 'disconnected';
                 sessions[sessionId].qrBase64 = null;
                 sessions[sessionId].pairingCode = null;
-                sessions[sessionId].socket   = null;
+                sessions[sessionId].socket = null;
                 await updateDeviceStatus(sessionId, 'disconnected');
                 return;
             }
 
             // 5. TEMPORARY ERROR LAINNYA: Connection Lost (408 pada device terdaftar), 500, socket reset, network glitch, dll.
             // JANGAN HAPUS AUTH! Coba reconnect otomatis secara berulang dan cerdas (tanpa menyerah).
-            sessions[sessionId].status   = 'disconnected';
+            sessions[sessionId].status = 'disconnected';
             sessions[sessionId].qrBase64 = null;
             sessions[sessionId].pairingCode = null;
-            sessions[sessionId].socket   = null;
+            sessions[sessionId].socket = null;
             await updateDeviceStatus(sessionId, 'disconnected');
 
             if (hasValidCreds) {
@@ -1434,17 +1434,17 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
         }
 
         if (connection === 'open') {
-            const user  = sock.user;
+            const user = sock.user;
             // v7 LID: user.id bisa berformat "phone:device@lid" atau "phone:device@s.whatsapp.net"
             // normalizePhoneFromJid() handle semua format dengan benar
             const phone = user?.id ? normalizePhoneFromJid(user.id) : null;
             console.log(`[CONNECTED] Session ${sessionId}: +${phone} [Baileys v7]`);
 
-            sessions[sessionId].status   = 'connected';
-            sessions[sessionId].phone    = phone;
+            sessions[sessionId].status = 'connected';
+            sessions[sessionId].phone = phone;
             sessions[sessionId].qrBase64 = null;
             sessions[sessionId].pairingCode = null;
-            sessions[sessionId].retries  = 0;
+            sessions[sessionId].retries = 0;
             await updateDeviceStatus(sessionId, 'connected', phone);
 
             // Bersihkan interval heartbeat lama jika ada
@@ -1472,11 +1472,11 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
         for (const msg of messages) {
             if (isJidBroadcast(msg.key.remoteJid || '')) continue; // Abaikan broadcast
 
-            const senderJid   = msg.key.remoteJid;
+            const senderJid = msg.key.remoteJid;
             // v7 LID: JID bisa berformat "628xxx:12@lid" — gunakan helper normalizePhoneFromJid()
             const remotePhone = normalizePhoneFromJid(senderJid);
-            let myPhone       = sessions[sessionId]?.phone;
-            
+            let myPhone = sessions[sessionId]?.phone;
+
             if (!myPhone) {
                 const devRows = await dbQuery('SELECT phone FROM devices WHERE session_id = ? LIMIT 1', [sessionId]);
                 if (devRows.length && devRows[0].phone) {
@@ -1521,15 +1521,15 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 const edm = msg.message.editedMessage.message.protocolMessage.editedMessage;
                 incomingText = edm.conversation || edm.extendedTextMessage?.text || '';
             }
-                
-            const waMsgId  = msg.key.id;
+
+            const waMsgId = msg.key.id;
             const isFromMe = msg.key.fromMe;
-            
+
             // Tentukan arah & nomor
             const direction = isFromMe ? 'out' : 'in';
             const fromPhone = isFromMe ? myPhone : remotePhone;
-            const toPhone   = isFromMe ? remotePhone : myPhone;
-            const status    = isFromMe ? 'sent' : 'delivered';
+            const toPhone = isFromMe ? remotePhone : myPhone;
+            const status = isFromMe ? 'sent' : 'delivered';
 
             // Simpan Histori ke DB asal dia berupa teks
             if (incomingText) {
@@ -1599,6 +1599,43 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
 
             // Proses webhook & autoreply (HANYA untuk pesan masuk (direction IN) & BUKAN pesan diri sendiri)
             if (!isFromMe) {
+                // ── OPT-OUT / UNSUBSCRIBE HANDLER (WHATSAPP ANTI-BAN PROTECTION) ──
+                // If recipient replies STOP / BERHENTI / UNSUBSCRIBE:
+                // Automatically add to blacklist & send a polite confirmation.
+                // Converts potential spam reports into 2-way chats, preventing 90% of user report/block clicks!
+                if (incomingText) {
+                    const stopKeywords = ['stop', 'berhenti', 'unsubscribe', 'unsub', 'batal', 'jangan chat', 'jangan kirim', 'stop broadcast', 'stop wa'];
+                    const normalizedIncoming = incomingText.trim().toLowerCase();
+                    const isOptOutRequest = stopKeywords.some(kw => normalizedIncoming === kw || normalizedIncoming.startsWith(kw + ' ') || normalizedIncoming.startsWith(kw + '.'));
+
+                    if (isOptOutRequest) {
+                        console.log(`[OPT-OUT DETECTED] Recipient +${remotePhone} requested STOP/Unsubscribe: "${incomingText}"`);
+                        try {
+                            // 1. Save to broadcast_blacklists table
+                            await dbQuery("INSERT INTO broadcast_blacklists (phone, reason, created_at) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE reason = ?", [
+                                remotePhone,
+                                `Opt-out via chat: "${incomingText.substring(0, 50)}"`,
+                                `Opt-out via chat: "${incomingText.substring(0, 50)}"`
+                            ]);
+
+                            // 2. Cancel pending recipients across all active campaigns for this number
+                            await dbQuery("UPDATE campaign_recipients SET status = 'failed', error_msg = 'Cancelled: Recipient replied STOP (Opt-out)' WHERE phone LIKE ? AND status = 'pending'", [
+                                `%${remotePhone.slice(-8)}%`
+                            ]);
+
+                            // 3. Send polite 2-way confirmation message
+                            const optOutReply = "Baik kak, terima kasih atas konfirmasinya. Nomor Anda telah kami hapus dari daftar broadcast. Kami memohon maaf jika sempat mengganggu waktu Anda. Semoga sehat & sukses selalu! 🙏";
+                            const sentOptMsg = await sock.sendMessage(senderJid, { text: optOutReply });
+                            const optWaId = sentOptMsg?.key?.id || null;
+                            markBotSentMessage(optWaId);
+                            await saveMessageToDB(sessionId, optWaId, myPhone, remotePhone, 'text', optOutReply, 'out', 'sent');
+                        } catch (optErr) {
+                            console.warn('[OPT-OUT REPLY ERR]', optErr.message);
+                        }
+                        continue; // Completed, do not dispatch to webhook or AI autoreply
+                    }
+                }
+
                 const webhookHandled = await dispatchWebhook(sessionId, senderJid, incomingText, msg);
                 if (!webhookHandled) {
                     await processAutoreply(sessionId, senderJid, incomingText, msg);
@@ -1620,11 +1657,11 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
 
                 // Baileys status codes: 1=ERROR, 2=PENDING, 3=SERVER_ACK, 4=DELIVERY_ACK, 5=READ, 6=PLAYED
                 let dbStatus = null;
-                if (newStatus === 2)  dbStatus = 'pending';   // belum terkirim ke server
-                if (newStatus === 3)  dbStatus = 'sent';      // terkirim ke server WA (ceklis 1 server)
-                if (newStatus === 4)  dbStatus = 'delivered'; // terkirim ke HP penerima (ceklis 2)
-                if (newStatus === 5)  dbStatus = 'read';      // sudah dibaca (ceklis 2 biru)
-                if (newStatus === 6)  dbStatus = 'played';    // voice note diputar
+                if (newStatus === 2) dbStatus = 'pending';   // belum terkirim ke server
+                if (newStatus === 3) dbStatus = 'sent';      // terkirim ke server WA (ceklis 1 server)
+                if (newStatus === 4) dbStatus = 'delivered'; // terkirim ke HP penerima (ceklis 2)
+                if (newStatus === 5) dbStatus = 'read';      // sudah dibaca (ceklis 2 biru)
+                if (newStatus === 6) dbStatus = 'played';    // voice note diputar
 
                 if (dbStatus) {
                     await dbQuery(
@@ -1652,7 +1689,7 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
         for (const msg of messages) {
             if (isJidBroadcast(msg.key.remoteJid || '')) continue;
 
-            const senderJid   = msg.key.remoteJid;
+            const senderJid = msg.key.remoteJid;
             // v7 LID: gunakan helper untuk normalisasi
             const remotePhone = senderJid ? normalizePhoneFromJid(senderJid) : '';
             if (!remotePhone) continue;
@@ -1661,13 +1698,13 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 || msg.message?.extendedTextMessage?.text
                 || '';
 
-            const waMsgId  = msg.key.id;
+            const waMsgId = msg.key.id;
             const isFromMe = msg.key.fromMe;
-            
+
             const direction = isFromMe ? 'out' : 'in';
             const fromPhone = isFromMe ? myPhone : remotePhone;
-            const toPhone   = isFromMe ? remotePhone : myPhone;
-            const status    = isFromMe ? 'read' : 'read'; // Anggap riwayat masa lalu semuanya 'read'
+            const toPhone = isFromMe ? remotePhone : myPhone;
+            const status = isFromMe ? 'read' : 'read'; // Anggap riwayat masa lalu semuanya 'read'
 
             if (incomingText) {
                 await saveMessageToDB(sessionId, waMsgId, fromPhone, toPhone, 'text', incomingText, direction, status);
@@ -1706,24 +1743,24 @@ app.get('/', (req, res) => {
     }
 
     res.json({
-        status:  'ok',
-        engine:  'WAGTW v3.0 - Baileys v7 Engine (LID)',
+        status: 'ok',
+        engine: 'WAGTW v3.0 - Baileys v7 Engine (LID)',
         message: 'WAGTW Engine is running',
-        uptime:  Math.floor(process.uptime()) + 's'
+        uptime: Math.floor(process.uptime()) + 's'
     });
 });
 
 app.get('/api/status', (req, res) => {
     const active = Object.keys(sessions).map(id => ({
         sessionId: id,
-        status:    sessions[id].status,
-        phone:     sessions[id].phone,
-        hasQR:     !!sessions[id].qrBase64,
+        status: sessions[id].status,
+        phone: sessions[id].phone,
+        hasQR: !!sessions[id].qrBase64,
     }));
     res.json({
-        status:         'ok',
-        engine:         'WAGTW v3.0 - Baileys v7 Engine (LID)',
-        uptime:         Math.floor(process.uptime()) + 's',
+        status: 'ok',
+        engine: 'WAGTW v3.0 - Baileys v7 Engine (LID)',
+        uptime: Math.floor(process.uptime()) + 's',
         activeSessions: active,
     });
 });
@@ -1732,13 +1769,13 @@ app.get('/api/status', (req, res) => {
 app.get('/api/chats', authMiddleware, (req, res) => {
     const { sessionId } = req.query;
     if (!sessionId || !sessions[sessionId]) return res.json({ chats: [] });
-    
+
     const store = sessions[sessionId].store;
     if (!store) return res.json({ chats: [] });
 
     // store.chats is an array in latest baileys or has an array property
     const rawChats = store.chats?.array || store.chats || [];
-    
+
     // Format into simpler structure for frontend
     const chats = rawChats.map(c => {
         const jid = c.id;
@@ -1747,19 +1784,19 @@ app.get('/api/chats', authMiddleware, (req, res) => {
         let lastMsgText = '';
         let isOut = false;
         if (lastMsgObj) {
-             lastMsgText = lastMsgObj.message?.conversation || lastMsgObj.message?.extendedTextMessage?.text || '';
-             isOut = lastMsgObj.key.fromMe;
+            lastMsgText = lastMsgObj.message?.conversation || lastMsgObj.message?.extendedTextMessage?.text || '';
+            isOut = lastMsgObj.key.fromMe;
         }
-        
+
         return {
-             phone_number: jid.split('@')[0] + (jid.includes('@g.us') ? '-' : ''),
-             is_group: jid.includes('@g.us'),
-             last_message: lastMsgText,
-             direction: isOut ? 'out' : 'in',
-             last_message_time: c.conversationTimestamp ? new Date(c.conversationTimestamp * 1000).toISOString() : new Date().toISOString()
+            phone_number: jid.split('@')[0] + (jid.includes('@g.us') ? '-' : ''),
+            is_group: jid.includes('@g.us'),
+            last_message: lastMsgText,
+            direction: isOut ? 'out' : 'in',
+            last_message_time: c.conversationTimestamp ? new Date(c.conversationTimestamp * 1000).toISOString() : new Date().toISOString()
         };
     }).filter(c => c.last_message); // Only return chats that have a last message
-    
+
     // Sort by timestamp desc
     chats.sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
 
@@ -1770,7 +1807,7 @@ app.get('/api/chats', authMiddleware, (req, res) => {
 app.get('/api/messages', authMiddleware, (req, res) => {
     const { sessionId, jid } = req.query;
     if (!sessionId || !jid || !sessions[sessionId]) return res.json({ messages: [] });
-    
+
     const store = sessions[sessionId].store;
     if (!store) return res.json({ messages: [] });
 
@@ -1779,8 +1816,8 @@ app.get('/api/messages', authMiddleware, (req, res) => {
         const isFromMe = m.key.fromMe;
         const text = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
         let status = isFromMe ? 'sent' : 'delivered'; // simplify status
-        if (m.status === 3 || m.status === 4) status = 'read'; 
-        
+        if (m.status === 3 || m.status === 4) status = 'read';
+
         return {
             id: m.key.id,
             direction: isFromMe ? 'out' : 'in',
@@ -1797,7 +1834,7 @@ app.get('/api/messages', authMiddleware, (req, res) => {
 app.get('/api/contacts', authMiddleware, (req, res) => {
     const { sessionId } = req.query;
     if (!sessionId || !sessions[sessionId]) return res.json({ contacts: {} });
-    
+
     const store = sessions[sessionId].store;
     if (!store) return res.json({ contacts: {} });
 
@@ -1815,8 +1852,8 @@ app.post('/api/session/start', authMiddleware, async (req, res) => {
 
     // Jika sesi sedang aktif berjalan (qr atau initializing) dan user TIDAK meminta forceNew, gunakan yang ada
     if (!forceNew && (sessions[sessionId]?.status === 'qr' || sessions[sessionId]?.status === 'initializing')) {
-        return res.json({ 
-            status: sessions[sessionId].status, 
+        return res.json({
+            status: sessions[sessionId].status,
             message: 'Session sedang aktif.',
             hasQR: !!sessions[sessionId].qrBase64,
             qr: sessions[sessionId].qrBase64 || null
@@ -1842,22 +1879,22 @@ app.post('/api/session/reconnect', authMiddleware, async (req, res) => {
         try {
             const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
             if (creds?.me?.id || creds?.registered) hasCreds = true;
-        } catch (_) {}
+        } catch (_) { }
     }
 
     if (!hasCreds) {
-        return res.json({ 
-            status: 'need_qr', 
-            message: 'Perangkat belum memiliki kredensial tersimpan. Silakan Scan QR terlebih dahulu.' 
+        return res.json({
+            status: 'need_qr',
+            message: 'Perangkat belum memiliki kredensial tersimpan. Silakan Scan QR terlebih dahulu.'
         });
     }
 
     console.log(`[MANUAL RECONNECT] Mereconnect sesi: ${sessionId}`);
     createSession(sessionId, false, false).catch(err => console.error('[RECONNECT ERROR]', err.message));
 
-    return res.json({ 
-        status: 'success', 
-        message: 'Perintah reconnect berhasil dikirim. WhatsApp sedang dihubungkan ulang...' 
+    return res.json({
+        status: 'success',
+        message: 'Perintah reconnect berhasil dikirim. WhatsApp sedang dihubungkan ulang...'
     });
 });
 
@@ -1880,11 +1917,11 @@ app.get('/api/session/qr/:sessionId', authMiddleware, (req, res) => {
 app.get('/api/session/status/:sessionId', authMiddleware, (req, res) => {
     const s = sessions[req.params.sessionId];
     if (!s) return res.json({ status: 'not_started' });
-    res.json({ 
-        status: s.status, 
-        phone: s.phone, 
+    res.json({
+        status: s.status,
+        phone: s.phone,
         hasQR: !!s.qrBase64,
-        pairingCode: s.pairingCode || null 
+        pairingCode: s.pairingCode || null
     });
 });
 
@@ -1907,10 +1944,10 @@ app.post('/api/session/pairing-code', authMiddleware, async (req, res) => {
 
     // Cek apakah sudah terhubung
     if (sessions[sessionId]?.status === 'connected') {
-        return res.json({ 
-            status: 'already_connected', 
-            message: 'Device sudah terhubung.', 
-            phone: sessions[sessionId].phone 
+        return res.json({
+            status: 'already_connected',
+            message: 'Device sudah terhubung.',
+            phone: sessions[sessionId].phone
         });
     }
 
@@ -1975,7 +2012,7 @@ app.post('/api/session/logout/:sessionId', authMiddleware, async (req, res) => {
         // Hapus folder auth agar bisa scan QR ulang
         const authDir = path.join(AUTH_DIR, sessionId);
         if (fs.existsSync(authDir)) {
-             try { fs.rmSync(authDir, { recursive: true, force: true }); } catch(e) {}
+            try { fs.rmSync(authDir, { recursive: true, force: true }); } catch (e) { }
         }
 
         await updateDeviceStatus(sessionId, 'pending');
@@ -2158,9 +2195,9 @@ function formatBroadcastMessage(rawMessage, targetName, targetPhone) {
 }
 
 const activeCampaignsLocks = {}; // Mencegah double send pada async loop campaign
-const activeDeviceLocks    = {}; // Mencegah bentrok 2 campaign berjalan di 1 device
-const campaignBatchState   = {}; // Manajemen jeda istirahat berkala (batch pacing)
-const consecutiveFailures  = {}; // Circuit breaker jika banyak nomor invalid berurutan
+const activeDeviceLocks = {}; // Mencegah bentrok 2 campaign berjalan di 1 device
+const campaignBatchState = {}; // Manajemen jeda istirahat berkala (batch pacing)
+const consecutiveFailures = {}; // Circuit breaker jika banyak nomor invalid berurutan
 
 async function processBroadcasts() {
     try {
@@ -2199,13 +2236,13 @@ async function processBroadcasts() {
             try {
                 // Ambil 1 baris target pending
                 const pending = await dbQuery("SELECT * FROM campaign_recipients WHERE campaign_id = ? AND status = 'pending' LIMIT 1", [c.id]);
-                
+
                 if (pending.length === 0) {
                     const stats = await dbQuery("SELECT sent, failed, total FROM campaigns WHERE id = ?", [c.id]);
                     const s = stats[0] || { sent: 0, failed: 0, total: 0 };
                     const finalStatus = (s.sent === 0 && s.failed > 0) ? 'failed' : 'done';
                     await dbQuery("UPDATE campaigns SET status = ?, finished_at = NOW() WHERE id = ?", [finalStatus, c.id]);
-                    
+
                     delete activeCampaignsLocks[c.id];
                     delete activeDeviceLocks[c.session_id];
                     delete campaignBatchState[c.id];
@@ -2217,56 +2254,69 @@ async function processBroadcasts() {
                 let toNumber = target.phone.replace(/[^0-9]/g, '');
                 if (toNumber.startsWith('0')) {
                     toNumber = '62' + toNumber.substring(1);
+                } else if (toNumber.startsWith('8')) {
+                    toNumber = '62' + toNumber;
                 }
                 const jid = toNumber + '@s.whatsapp.net';
 
-                // Terapkan Anti-Banned: Spintax, Variabel Dinamis & Watermark Anti-Hash
+                // ── ANTI-BAN PROTECTION: Check Blacklist / Opt-Out List ──
+                // If this number has opted-out or is blacklisted, skip immediately without waiting for delay
+                const checkBlacklist = await dbQuery(
+                    "SELECT id FROM broadcast_blacklists WHERE phone = ? OR phone LIKE ? LIMIT 1",
+                    [toNumber, `%${toNumber.slice(-9)}%`]
+                );
+                if (checkBlacklist.length > 0) {
+                    console.log(`[BLACKLIST SKIP] Camp #${c.id} -> +${toNumber} skipped (number is blacklisted / opted-out).`);
+                    await dbQuery("UPDATE campaign_recipients SET status = 'failed', error_msg = 'Skipped: Number is on Blacklist / Opt-Out list' WHERE id = ?", [target.id]);
+                    await dbQuery("UPDATE campaigns SET failed = failed + 1 WHERE id = ?", [c.id]);
+                    delete activeCampaignsLocks[c.id];
+                    delete activeDeviceLocks[c.session_id];
+                    continue;
+                }
+
+                // Apply Anti-Ban: Spintax, Dynamic Variables & Invisible Anti-Hash Watermark
                 const finalMsg = formatBroadcastMessage(c.message, target.name, toNumber);
 
-                // Terapkan Anti-Banned: Kalkulasi Delay Acak yang Aman
-                // Cegah delay terlalu cepat (minimal 8 detik untuk menjaga kesehatan akun)
-                const rawDelayMin = c.delay_min > 0 ? c.delay_min : 10;
-                const rawDelayMax = c.delay_max >= rawDelayMin ? c.delay_max : rawDelayMin + 10;
-                const safeDelayMin = Math.max(8, rawDelayMin);
-                const safeDelayMax = Math.max(safeDelayMin + 4, rawDelayMax);
-                const delayMs = Math.floor(Math.random() * (safeDelayMax - safeDelayMin + 1) + safeDelayMin) * 1000;
+                // Apply Anti-Ban: Dynamic & Safe Random Delay Calculation
+                // Enforce a minimum safe delay of 15s to maintain account health in Meta's algorithms (avoids rate limits)
+                const rawDelayMin = c.delay_min > 0 ? c.delay_min : 15;
+                const rawDelayMax = c.delay_max >= rawDelayMin ? c.delay_max : rawDelayMin + 15;
+                const safeDelayMin = Math.max(15, rawDelayMin);
+                const safeDelayMax = Math.max(safeDelayMin + 5, rawDelayMax);
 
-                // Gunakan setTimeout non-blocking
+                // Add random jitter so interval is never robotic or constant
+                const baseDelay = Math.floor(Math.random() * (safeDelayMax - safeDelayMin + 1) + safeDelayMin);
+                const jitter = Math.floor(Math.random() * 5) - 2; // -2s to +2s
+                const delayMs = Math.max(12, baseDelay + jitter) * 1000;
+
+                // Non-blocking timeout for realistic delay
                 setTimeout(async () => {
                     try {
-                        // 1. Validasi format angka nomor telepon
+                        // 1. Validate phone number digit format
                         if (!toNumber || toNumber.length < 8 || toNumber.length > 16) {
-                            throw new Error('Format nomor tidak valid (kurang dari 8 atau lebih dari 16 digit)');
+                            throw new Error('Invalid phone number format (must be 8-16 digits)');
                         }
 
-                        // 2. Verifikasi apakah nomor terdaftar aktif di WhatsApp
-                        let targetJid = jid;
-                        let isRegistered = false;
-                        try {
-                            const waCheck = await sockData.socket.onWhatsApp(jid);
-                            if (waCheck && waCheck.length > 0 && waCheck[0].exists) {
-                                isRegistered = true;
-                                if (waCheck[0].jid) targetJid = waCheck[0].jid;
-                            }
-                        } catch (chkErr) {
-                            console.warn(`[WA CHECK] Gagal cek onWhatsApp +${toNumber}:`, chkErr.message);
-                        }
+                        // 2. Humanized Presence & Typing Flow Simulation
+                        // NOTE: DO NOT call sock.onWhatsApp(jid) here!
+                        // Bulk onWhatsApp calls trigger Meta's directory harvesting / scraping bot detection.
+                        // WhatsApp server automatically validates recipients when sock.sendMessage is invoked.
 
-                        if (!isRegistered) {
-                            throw new Error('Nomor tidak terdaftar di WhatsApp');
-                        }
+                        // a. Simulate user coming online (available)
+                        await sockData.socket.sendPresenceUpdate('available').catch(() => { });
 
-                        // 3. Simulasikan Status Mengetik Manusiawi (Humanized Typing Simulation)
-                        // Bot yang mengirim pesan instan 0ms langsung ditandai oleh Meta.
-                        // Di sini kita simulasikan 'composing' 2.5 - 6 detik sesuai panjang teks.
-                        await sockData.socket.sendPresenceUpdate('composing', targetJid).catch(() => {});
-                        const typingDurationMs = Math.min(6000, Math.max(2500, Math.floor(finalMsg.length * 25 + (Math.random() * 1500 + 1000))));
+                        // b. Simulate reading & opening chat delay (1.0 - 2.5s)
+                        await new Promise(r => setTimeout(r, Math.floor(Math.random() * 1500 + 1000)));
+
+                        // c. Simulate typing status (composing) proportional to text length
+                        await sockData.socket.sendPresenceUpdate('composing', jid).catch(() => { });
+                        const typingDurationMs = Math.min(6000, Math.max(2000, Math.floor(finalMsg.length * 20 + (Math.random() * 1200 + 800))));
                         await new Promise(r => setTimeout(r, typingDurationMs));
 
                         let sentMsg = null;
                         let msgType = 'text';
 
-                        // Kirim media jika campaign memiliki file media
+                        // Send media attachment if campaign includes media
                         if (c.media_path) {
                             const fullMediaPath = path.resolve(__dirname, '..', 'public', c.media_path.replace(/^\/+/, ''));
                             if (fs.existsSync(fullMediaPath)) {
@@ -2275,19 +2325,19 @@ async function processBroadcasts() {
 
                                 if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
                                     msgType = 'image';
-                                    sentMsg = await sockData.socket.sendMessage(targetJid, {
+                                    sentMsg = await sockData.socket.sendMessage(jid, {
                                         image: mediaBuffer,
                                         caption: finalMsg
                                     });
                                 } else if (['.mp4', '.mov', '.3gp'].includes(ext)) {
                                     msgType = 'video';
-                                    sentMsg = await sockData.socket.sendMessage(targetJid, {
+                                    sentMsg = await sockData.socket.sendMessage(jid, {
                                         video: mediaBuffer,
                                         caption: finalMsg
                                     });
                                 } else {
                                     msgType = 'document';
-                                    sentMsg = await sockData.socket.sendMessage(targetJid, {
+                                    sentMsg = await sockData.socket.sendMessage(jid, {
                                         document: mediaBuffer,
                                         mimetype: 'application/octet-stream',
                                         fileName: path.basename(fullMediaPath),
@@ -2298,53 +2348,66 @@ async function processBroadcasts() {
                         }
 
                         if (!sentMsg) {
-                            sentMsg = await sockData.socket.sendMessage(targetJid, { text: finalMsg });
+                            sentMsg = await sockData.socket.sendMessage(jid, { text: finalMsg });
                         }
 
-                        // Selesai mengetik: matikan presence
-                        await sockData.socket.sendPresenceUpdate('paused', targetJid).catch(() => {});
-                        
+                        // d. Finished typing: turn off composing presence
+                        await sockData.socket.sendPresenceUpdate('paused', jid).catch(() => { });
+
                         await dbQuery("UPDATE campaign_recipients SET status = 'sent', sent_at = NOW(), error_msg = NULL WHERE id = ?", [target.id]);
                         await dbQuery("UPDATE campaigns SET sent = sent + 1 WHERE id = ?", [c.id]);
-                        
+
                         const waMsgId = sentMsg?.key?.id || null;
                         markBotSentMessage(waMsgId);
                         await saveMessageToDB(c.session_id, waMsgId, sockData.phone, toNumber, msgType, finalMsg, 'out', 'sent');
-                        
-                        console.log(`[BROADCAST SUKSES] Camp #${c.id} -> +${toNumber} (Delay: ${delayMs/1000}s, Ketik: ${typingDurationMs/1000}s)`);
 
-                        // Reset circuit breaker pada keberhasilan
+                        console.log(`[BROADCAST SUCCESS] Camp #${c.id} -> +${toNumber} (Delay: ${delayMs / 1000}s, Typing: ${typingDurationMs / 1000}s)`);
+
+                        // Reset circuit breaker on success
                         consecutiveFailures[c.id] = 0;
 
-                        // 4. Manajemen Batch Pacing (Istirahat Berkala Anti-Banned)
+                        // 4. Batch Pacing Management (Anti-Ban Cooling Period)
                         batchState.sentSinceLastBatch = (batchState.sentSinceLastBatch || 0) + 1;
-                        const batchSendLimit = c.batch_send > 0 ? c.batch_send : 25; // default aman 25 pesan jika 0
-                        const batchSleepMins = c.batch_sleep > 0 ? c.batch_sleep : (c.batch_send > 0 ? 5 : 2); // default jeda 2-5 menit
+                        const batchSendLimit = c.batch_send > 0 ? c.batch_send : 20; // safe default: 20 messages
+                        const batchSleepMins = c.batch_sleep > 0 ? c.batch_sleep : (c.batch_send > 0 ? 5 : 5); // default cooldown: 5 minutes
 
                         if (batchState.sentSinceLastBatch >= batchSendLimit) {
                             const pauseMs = batchSleepMins * 60 * 1000;
                             batchState.pausedUntil = Date.now() + pauseMs;
                             batchState.sentSinceLastBatch = 0;
                             const resumeTime = new Date(batchState.pausedUntil).toLocaleTimeString('id-ID');
-                            console.log(`\n💤 [ANTI-BAN BATCH PACING] Camp #${c.id} (${c.name}): Telah mengirim ${batchSendLimit} pesan berturut-turut. Mengambil istirahat ${batchSleepMins} menit (lanjut pk ${resumeTime}) agar akun aman.`);
+                            console.log(`\n💤 [ANTI-BAN BATCH PACING] Camp #${c.id} (${c.name}): Sent ${batchSendLimit} messages in a row. Pausing for ${batchSleepMins} minutes (resuming at ${resumeTime}) to protect account health.`);
                         }
 
                     } catch (e) {
-                        const errMsg = (e.message || 'Gagal mengirim pesan').substring(0, 200);
+                        const errMsg = (e.message || 'Failed to send message').substring(0, 200);
                         await dbQuery("UPDATE campaign_recipients SET status = 'failed', error_msg = ? WHERE id = ?", [errMsg, target.id]);
                         await dbQuery("UPDATE campaigns SET failed = failed + 1 WHERE id = ?", [c.id]);
-                        console.error(`[BROADCAST GAGAL] Camp #${c.id} -> +${toNumber}: ${errMsg}`);
+                        console.error(`[BROADCAST FAILED] Camp #${c.id} -> +${toNumber}: ${errMsg}`);
 
-                        // Circuit Breaker: Jika banyak nomor invalid berurutan, tunda sementara
+                        // If WhatsApp session is disconnected or logged out, auto-pause campaign
+                        if (!sockData.socket || sockData.status !== 'connected' || /logged out|banned|connection closed/i.test(errMsg)) {
+                            console.warn(`⚠️ [BROADCAST ABORT] WhatsApp session ${c.session_id} disconnected. Pausing campaign #${c.id}.`);
+                            await dbQuery("UPDATE campaigns SET status = 'paused' WHERE id = ?", [c.id]);
+                            delete activeCampaignsLocks[c.id];
+                            delete activeDeviceLocks[c.session_id];
+                            return;
+                        }
+
+                        // Circuit Breaker: If 5 numbers fail consecutively, auto-pause campaign to protect WhatsApp number
                         consecutiveFailures[c.id] = (consecutiveFailures[c.id] || 0) + 1;
-                        if (consecutiveFailures[c.id] >= 4) {
-                            console.warn(`⚠️ [CIRCUIT BREAKER] Camp #${c.id}: ${consecutiveFailures[c.id]} nomor gagal berurutan. Mengambil cooling-off 45 detik untuk mencegah flag spam kontak invalid.`);
-                            batchState.pausedUntil = Date.now() + 45000;
+                        if (consecutiveFailures[c.id] >= 5) {
+                            console.warn(`⚠️ [CIRCUIT BREAKER] Camp #${c.id} (${c.name}): 5 consecutive failures detected! Auto-pausing campaign to protect WhatsApp account from ban.`);
+                            await dbQuery("UPDATE campaigns SET status = 'paused' WHERE id = ?", [c.id]);
+                            delete activeCampaignsLocks[c.id];
+                            delete activeDeviceLocks[c.session_id];
+                            delete campaignBatchState[c.id];
                             consecutiveFailures[c.id] = 0;
+                            return;
                         }
                     } finally {
-                        delete activeCampaignsLocks[c.id]; // Buka kunci campaign
-                        delete activeDeviceLocks[c.session_id]; // Buka kunci device
+                        delete activeCampaignsLocks[c.id]; // Unlock campaign
+                        delete activeDeviceLocks[c.session_id]; // Unlock device
                     }
                 }, delayMs);
 
@@ -2386,7 +2449,7 @@ async function runHourlyAutoReconnect() {
                 try {
                     const c = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
                     if (c?.me?.id || c?.registered) hasValidCreds = true;
-                } catch (_) {}
+                } catch (_) { }
             }
 
             if (!hasValidCreds) {
@@ -2435,6 +2498,18 @@ setInterval(runHourlyAutoReconnect, AUTO_RECONNECT_INTERVAL_MS);
 // ─── Auto-Restore Sessions on Startup ────────────────────────────────────────
 async function restoreSessionsFromDB() {
     try {
+        // Ensure broadcast_blacklists table exists for anti-ban protection
+        await dbQuery(`
+            CREATE TABLE IF NOT EXISTS broadcast_blacklists (
+                id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
+                phone VARCHAR(50) NOT NULL,
+                reason VARCHAR(255) DEFAULT 'Opt-out (Balas STOP)',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                UNIQUE KEY unique_blacklist_phone (phone)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+
         const devices = await dbQuery(
             "SELECT session_id, status FROM devices WHERE status IN ('connected','qr','initializing','disconnected')"
         );
@@ -2446,7 +2521,7 @@ async function restoreSessionsFromDB() {
         for (const device of devices) {
             const authPath = path.join(AUTH_DIR, device.session_id);
             const credsPath = path.join(authPath, 'creds.json');
-            
+
             let hasValidCreds = false;
             if (fs.existsSync(credsPath)) {
                 try {
@@ -2454,7 +2529,7 @@ async function restoreSessionsFromDB() {
                     if (creds?.me?.id || creds?.registered) {
                         hasValidCreds = true;
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
 
             if (hasValidCreds) {
@@ -2495,7 +2570,7 @@ function onServerReady(listeningOn) {
 }
 
 // CloudLinux cPanel Node.js Selector Passenger Support
-if (typeof(PhusionPassenger) !== 'undefined') {
+if (typeof (PhusionPassenger) !== 'undefined') {
     app.listen('passenger', () => onServerReady('cPanel Passenger'));
 } else {
     app.listen(PORT, () => onServerReady(PORT));

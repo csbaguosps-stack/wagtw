@@ -21,6 +21,41 @@
         </a>
     </div>
 
+    <!-- Banner Edukasi Anti-Banned WhatsApp -->
+    <div class="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-200/80 rounded-2xl p-4 sm:p-5 shadow-xs">
+        <div class="flex items-start gap-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 font-bold text-base shadow-xs">
+                💡
+            </div>
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <h4 class="font-bold text-xs sm:text-sm text-amber-950 flex items-center gap-1.5">
+                        <span>Penyebab Nomor WhatsApp Terblokir & Cara Broadcast Aman</span>
+                    </h4>
+                    <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 uppercase tracking-wider">Aturan Penting Meta</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2.5 text-[11px] sm:text-xs text-amber-900/90 leading-relaxed">
+                    <div class="flex items-start gap-2 bg-white/60 p-2 rounded-xl border border-amber-100">
+                        <span class="text-rose-600 font-bold text-sm shrink-0">1.</span>
+                        <span><b>Penerima Menekan "Laporkan":</b> 90% ban terjadi karena penerima melapor ke WhatsApp. Selalu aktifkan opsi <i>Balas STOP</i> agar penerima memilih unsubscribe ramah.</span>
+                    </div>
+                    <div class="flex items-start gap-2 bg-white/60 p-2 rounded-xl border border-amber-100">
+                        <span class="text-rose-600 font-bold text-sm shrink-0">2.</span>
+                        <span><b>Nomor Belum Di-Warm Up:</b> Nomor baru (< 30 hari) atau nomor jarang chat dilarang broadcast massal. Wajib ada chat 2 arah aktif selama minimal 1-2 minggu.</span>
+                    </div>
+                    <div class="flex items-start gap-2 bg-white/60 p-2 rounded-xl border border-amber-100">
+                        <span class="text-rose-600 font-bold text-sm shrink-0">3.</span>
+                        <span><b>Pesan Massal Tanpa Variasi:</b> Selalu gunakan Spintax <code>{Hai|Halo|Salam}</code> agar kata-kata tidak 100% identik di mata filter spam Meta.</span>
+                    </div>
+                    <div class="flex items-start gap-2 bg-white/60 p-2 rounded-xl border border-amber-100">
+                        <span class="text-rose-600 font-bold text-sm shrink-0">4.</span>
+                        <span><b>Jeda Terlalu Cepat:</b> Gunakan jeda minimal 15-45 detik dan fitur <i>Batch Pacing</i> (istirahat berkala per 15-20 pesan) agar ritme menyerupai manusia.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Form Broadcast -->
     <form id="form-broadcast" class="space-y-5">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
@@ -127,6 +162,9 @@
                             </button>
                             <button type="button" onclick="window.insertMessageTag('[UniqueId]')" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 active:bg-amber-300 text-amber-800 text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer select-none" title="Kode Unik Acak Anti-Duplicate">
                                 <span>+ [UniqueId]</span>
+                            </button>
+                            <button type="button" onclick="window.insertSafeSpintaxTemplate()" class="btn-msg-tag px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer select-none" title="Sisipkan Template Ramah Anti-Blokir Lengkap">
+                                <span>🛡️ Template Anti-Blokir</span>
                             </button>
                             
                             <span class="text-slate-300 mx-0.5 hidden sm:inline">|</span>
@@ -283,21 +321,55 @@
                         <svg class="w-24 h-24 sm:w-28 sm:h-28" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                     </div>
                     <div class="relative z-10">
-                        <h3 class="text-base sm:text-lg font-bold text-indigo-900 mb-3 flex items-center gap-2">
-                            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg> 
-                            <span>Proteksi Anti-Banned</span>
-                        </h3>
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-base sm:text-lg font-bold text-indigo-900 flex items-center gap-2">
+                                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg> 
+                                <span>Proteksi Anti-Banned Cerdas</span>
+                            </h3>
+                            <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-200 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Perlindungan Aktif
+                            </span>
+                        </div>
+
+                        <!-- Profil Kecepatan -->
+                        <div class="mb-4">
+                            <label class="block text-xs font-bold text-indigo-950 uppercase tracking-wider mb-1.5">Pilih Profil Keamanan:</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button type="button" id="btn-preset-safe" onclick="window.applySpeedPreset('safe')" class="p-2 sm:p-2.5 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-900 text-left transition cursor-pointer shadow-xs">
+                                    <div class="font-bold text-xs flex items-center gap-1">
+                                        <span>🛡️</span>
+                                        <span>Sangat Aman</span>
+                                    </div>
+                                    <div class="text-[10px] text-emerald-700 mt-0.5 font-medium">Jeda 20-45s • Batch 15</div>
+                                </button>
+                                <button type="button" id="btn-preset-normal" onclick="window.applySpeedPreset('normal')" class="p-2 sm:p-2.5 rounded-xl border border-indigo-200 bg-white hover:bg-indigo-50/50 text-indigo-900 text-left transition cursor-pointer">
+                                    <div class="font-bold text-xs flex items-center gap-1">
+                                        <span>⚖️</span>
+                                        <span>Standar</span>
+                                    </div>
+                                    <div class="text-[10px] text-indigo-600 mt-0.5 font-medium">Jeda 15-30s • Batch 25</div>
+                                </button>
+                                <button type="button" id="btn-preset-fast" onclick="window.applySpeedPreset('fast')" class="p-2 sm:p-2.5 rounded-xl border border-indigo-200 bg-white hover:bg-indigo-50/50 text-indigo-900 text-left transition cursor-pointer">
+                                    <div class="font-bold text-xs flex items-center gap-1">
+                                        <span>⚡</span>
+                                        <span>Cepat</span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 mt-0.5 font-medium">Khusus Kontak Lama</div>
+                                </button>
+                            </div>
+                        </div>
                         
                         <div class="space-y-3.5">
                             <div>
                                 <label class="block text-xs sm:text-sm font-semibold text-indigo-900 mb-1.5">Jeda Pengiriman (Acak)</label>
                                 <div class="flex items-center gap-2 sm:gap-3">
-                                    <input type="number" min="1" name="delay_min" value="10" title="Minimal delay (detik)" class="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold text-center">
+                                    <input type="number" min="8" id="delay_min_input" name="delay_min" value="20" title="Minimal delay (detik)" class="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold text-center">
                                     <span class="text-indigo-400 font-bold text-xs sm:text-sm">sd.</span>
-                                    <input type="number" min="2" name="delay_max" value="25" title="Maksimal delay (detik)" class="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold text-center">
+                                    <input type="number" min="10" id="delay_max_input" name="delay_max" value="45" title="Maksimal delay (detik)" class="w-full px-3 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold text-center">
                                     <span class="text-xs sm:text-sm font-bold text-indigo-700">Detik</span>
                                 </div>
-                                <p class="text-[11px] sm:text-xs text-indigo-600 mt-1">Sistem memilih jeda acak di antara rentang waktu ini untuk menyerupai ketikan manusia.</p>
+                                <p class="text-[11px] sm:text-xs text-indigo-600 mt-1">Sistem memilih jeda acak dinamis dengan variasi alami untuk menyerupai ritme pengetikan manusia.</p>
                             </div>
 
                             <div class="h-px bg-indigo-200/60 my-1.5"></div>
@@ -308,19 +380,37 @@
                                     <div>
                                         <p class="text-[10px] sm:text-[11px] font-bold text-indigo-500 mb-1 uppercase">Kirim sebanyak</p>
                                         <div class="relative">
-                                            <input type="number" min="0" name="batch_send" value="20" class="w-full pl-3 pr-10 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold">
+                                            <input type="number" min="0" id="batch_send_input" name="batch_send" value="15" class="w-full pl-3 pr-10 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold">
                                             <span class="absolute right-2.5 top-2 text-[11px] font-bold text-gray-400">Pesan</span>
                                         </div>
                                     </div>
                                     <div>
                                         <p class="text-[10px] sm:text-[11px] font-bold text-indigo-500 mb-1 uppercase">Lalu jeda selama</p>
                                         <div class="relative">
-                                            <input type="number" min="0" name="batch_sleep" value="10" class="w-full pl-3 pr-10 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold">
+                                            <input type="number" min="0" id="batch_sleep_input" name="batch_sleep" value="10" class="w-full pl-3 pr-10 py-2 bg-white border border-indigo-200 rounded-xl outline-none text-xs sm:text-sm font-bold">
                                             <span class="absolute right-2.5 top-2 text-[11px] font-bold text-gray-400">Menit</span>
                                         </div>
                                     </div>
                                 </div>
-                                <p class="text-[11px] sm:text-xs text-indigo-600 mt-1">Isi 0 jika tidak ingin menggunakan fitur batch pacing.</p>
+                                <p class="text-[11px] sm:text-xs text-indigo-600 mt-1">Pendinginan berkala agar nomor WA tidak dicurigai sistem fraud Meta karena pengiriman konstan.</p>
+                            </div>
+
+                            <div class="h-px bg-indigo-200/60 my-1.5"></div>
+
+                            <!-- Opsi Footer STOP Anti-Report -->
+                            <div class="bg-white/90 rounded-xl p-3 border border-indigo-200/80 shadow-2xs">
+                                <label class="flex items-start gap-2.5 cursor-pointer select-none">
+                                    <input type="checkbox" name="include_optout" value="1" checked id="optout_footer_check" onchange="window.updateWhatsAppPreview()" class="mt-0.5 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300">
+                                    <div>
+                                        <span class="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                                            <span>Sertakan Footer Unsubscribe (Anti-Report WhatsApp)</span>
+                                            <span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-bold">Sangat Dianjurkan</span>
+                                        </span>
+                                        <p class="text-[11px] text-indigo-700/90 mt-0.5 leading-relaxed">
+                                            Menyisipkan <code>_Balas STOP jika tidak ingin menerima info ini lagi._</code> di akhir pesan. Jika penerima membalas STOP, sistem otomatis mem-blacklist nomor tersebut dari broadcast tanpa dilaporkan ke pihak WhatsApp.
+                                        </p>
+                                    </div>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -529,6 +619,55 @@ window.insertEmoji = function(emoji) {
     } catch(e) {}
 
     window.updateWhatsAppPreview();
+};
+
+window.insertSafeSpintaxTemplate = function() {
+    const textarea = document.getElementById('messageTextarea');
+    if (!textarea) return;
+    const template = "{Halo|Hai|Salam hangat|Halo kak} [Name],\n\n{Semoga harinya menyenangkan|Semoga sehat & lancar selalu|Kabar baik ya}!\n\n[Tuliskan penawaran atau informasi Anda di sini]\n\n━━━━━━━━━━━━━━━\n_Balas STOP jika tidak ingin menerima info ini lagi._";
+    textarea.value = template;
+    textarea.focus();
+    window.updateWhatsAppPreview();
+};
+
+window.applySpeedPreset = function(mode) {
+    const minInput = document.getElementById('delay_min_input');
+    const maxInput = document.getElementById('delay_max_input');
+    const batchSendInput = document.getElementById('batch_send_input');
+    const batchSleepInput = document.getElementById('batch_sleep_input');
+    const btnSafe = document.getElementById('btn-preset-safe');
+    const btnNormal = document.getElementById('btn-preset-normal');
+    const btnFast = document.getElementById('btn-preset-fast');
+
+    const resetBtnStyles = () => {
+        [btnSafe, btnNormal, btnFast].forEach(btn => {
+            if (btn) {
+                btn.className = "p-2 sm:p-2.5 rounded-xl border border-indigo-200 bg-white hover:bg-indigo-50/50 text-indigo-900 text-left transition cursor-pointer";
+            }
+        });
+    };
+
+    resetBtnStyles();
+
+    if (mode === 'safe') {
+        if (minInput) minInput.value = 20;
+        if (maxInput) maxInput.value = 45;
+        if (batchSendInput) batchSendInput.value = 15;
+        if (batchSleepInput) batchSleepInput.value = 10;
+        if (btnSafe) btnSafe.className = "p-2 sm:p-2.5 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-900 text-left transition cursor-pointer shadow-xs";
+    } else if (mode === 'normal') {
+        if (minInput) minInput.value = 15;
+        if (maxInput) maxInput.value = 30;
+        if (batchSendInput) batchSendInput.value = 25;
+        if (batchSleepInput) batchSleepInput.value = 5;
+        if (btnNormal) btnNormal.className = "p-2 sm:p-2.5 rounded-xl border-2 border-indigo-500 bg-indigo-50 text-indigo-900 text-left transition cursor-pointer shadow-xs";
+    } else if (mode === 'fast') {
+        if (minInput) minInput.value = 10;
+        if (maxInput) maxInput.value = 20;
+        if (batchSendInput) batchSendInput.value = 35;
+        if (batchSleepInput) batchSleepInput.value = 3;
+        if (btnFast) btnFast.className = "p-2 sm:p-2.5 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-900 text-left transition cursor-pointer shadow-xs";
+    }
 };
 
 window.toggleEmojiPicker = function(e, forceState) {
@@ -743,6 +882,12 @@ window.updateWhatsAppPreview = function() {
             // Kode Acak Unik Simulasi
             const simulatedRef = '#REF' + Math.floor(1000 + (window.spintaxSeed || 0.42) * 9000);
             processed = processed.replace(/\[(UniqueId|Unique|Random|Ref|Kode)\]/gi, simulatedRef);
+
+            // Sertakan Footer Unsubscribe (Balas STOP) jika checkbox aktif & belum ada teks STOP
+            const optOutCheck = document.getElementById('optout_footer_check');
+            if (optOutCheck && optOutCheck.checked && !/\bstop\b/i.test(processed)) {
+                processed += "\n\n_Balas STOP jika tidak ingin menerima info ini lagi._";
+            }
 
             previewTextEl.innerHTML = window.parseWhatsAppMarkdown(processed);
         }

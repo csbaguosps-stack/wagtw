@@ -155,6 +155,11 @@ class Broadcast extends Controller {
             }
         }
 
+        // Append opt-out unsubscribe footer if selected by user
+        if (!empty($_POST['include_optout']) && !preg_match('/\bstop\b/i', $message)) {
+            $message .= "\n\n_Balas STOP jika tidak ingin menerima info ini lagi._";
+        }
+
         $campaignData = [
             'user_id'    => $_SESSION['user_id'],
             'device_id'  => $deviceId,
@@ -162,10 +167,10 @@ class Broadcast extends Controller {
             'msg_type'   => $mediaPath ? 'image' : 'text', // simplification mapping
             'message'    => $message,
             'media_path' => $mediaPath,
-            'delay_min'  => intval($_POST['delay_min'] ?? 5),
-            'delay_max'  => intval($_POST['delay_max'] ?? 15),
-            'batch_send' => intval($_POST['batch_send'] ?? 0),
-            'batch_sleep'=> intval($_POST['batch_sleep'] ?? 0),
+            'delay_min'  => max(10, intval($_POST['delay_min'] ?? 15)),
+            'delay_max'  => max(15, intval($_POST['delay_max'] ?? 35)),
+            'batch_send' => intval($_POST['batch_send'] ?? 20),
+            'batch_sleep'=> intval($_POST['batch_sleep'] ?? 10),
         ];
 
         $insertId = $this->model('Broadcast_model')->createCampaign($campaignData, $recipients);
@@ -399,5 +404,51 @@ class Broadcast extends Controller {
         $result = $this->model('Broadcast_model')->updateCampaign($id, $this->getVisibleUserIdsString(), $updateData, $recipients);
 
         echo json_encode($result);
+    }
+
+    // ─── BLACKLIST / OPT-OUT MANAGEMENT ENDPOINTS ───
+    public function blacklists()
+    {
+        header('Content-Type: application/json');
+        $list = $this->model('Broadcast_model')->getBlacklists();
+        echo json_encode(['status' => 'success', 'data' => $list]);
+    }
+
+    public function add_blacklist()
+    {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+
+        $phone = trim($_POST['phone'] ?? '');
+        $reason = trim($_POST['reason'] ?? 'Manual Admin');
+
+        if (empty($phone)) {
+            echo json_encode(['status' => 'error', 'message' => 'Nomor telepon wajib diisi.']);
+            return;
+        }
+
+        if ($this->model('Broadcast_model')->addBlacklist($phone, $reason)) {
+            echo json_encode(['status' => 'success', 'message' => 'Nomor berhasil ditambahkan ke Blacklist.']);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Gagal menambahkan nomor ke Blacklist.']);
+        }
+    }
+
+    public function delete_blacklist()
+    {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+
+        $id = intval($_POST['id'] ?? 0);
+        if (!$id) {
+            echo json_encode(['status' => 'error', 'message' => 'ID tidak valid.']);
+            return;
+        }
+
+        if ($this->model('Broadcast_model')->removeBlacklist($id)) {
+            echo json_encode(['status' => 'success', 'message' => 'Nomor berhasil dihapus dari Blacklist.']);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Gagal menghapus nomor dari Blacklist.']);
+        }
     }
 }

@@ -40,7 +40,11 @@ $successRate = $processed > 0 ? round(($totalSent / $processed) * 100, 1) : 100;
             </p>
         </div>
 
-        <div class="relative z-10 shrink-0">
+        <div class="relative z-10 shrink-0 flex items-center gap-2.5 flex-wrap">
+            <button type="button" onclick="openBlacklistModal()" class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 hover:text-white font-bold text-sm border border-slate-700 shadow-md transition cursor-pointer">
+                <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                <span>Blacklist / Opt-Out</span>
+            </button>
             <a href="<?= BASEURL ?>/broadcast/create" data-nav class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                 Buat Broadcast Baru
@@ -586,6 +590,73 @@ $successRate = $processed > 0 ? round(($totalSent / $processed) * 100, 1) : 100;
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal Blacklist / Opt-Out Broadcast -->
+    <div id="modal-blacklist" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm p-2 sm:p-4 md:p-6 flex items-center justify-center transition-opacity duration-200">
+        <div class="bg-white w-full max-w-3xl rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-150">
+            <!-- Modal Header -->
+            <div class="p-4 sm:p-6 border-b border-slate-100 flex items-start sm:items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white">
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center flex-wrap gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-400/30 text-rose-300 text-xs font-semibold uppercase tracking-wider shrink-0">
+                            Anti-Report System
+                        </span>
+                        <span class="font-bold text-white text-sm sm:text-base">Daftar Blacklist / Opt-Out</span>
+                    </div>
+                    <p class="text-[11px] sm:text-xs text-slate-300 mt-1 leading-normal">Nomor di bawah ini otomatis dilewati sistem saat pengiriman broadcast untuk mencegah pemblokiran akun.</p>
+                </div>
+                <button onclick="closeBlacklistModal()" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Content Area (Scrollable) -->
+            <div class="p-4 sm:p-6 overflow-y-auto space-y-4 max-h-[70vh]">
+                <!-- Form Tambah Manual -->
+                <div class="bg-slate-50 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80">
+                    <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        Tambah Nomor ke Blacklist Secara Manual
+                    </h4>
+                    <form id="form-add-blacklist" onsubmit="submitAddBlacklist(event)" class="flex flex-col sm:flex-row items-center gap-2">
+                        <input type="text" id="bl-phone-input" placeholder="Misal: 08123456789 atau 62812..." required class="w-full sm:flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-rose-300 font-mono">
+                        <input type="text" id="bl-reason-input" placeholder="Alasan (Opsional)" class="w-full sm:w-48 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-rose-300">
+                        <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 shrink-0">
+                            <span>Simpan</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Table Daftar Blacklist -->
+                <div class="overflow-x-auto rounded-xl border border-slate-200/80">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100/80 text-slate-600 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
+                                <th class="py-2.5 px-3">No</th>
+                                <th class="py-2.5 px-3">Nomor Telepon</th>
+                                <th class="py-2.5 px-3">Alasan / Sumber</th>
+                                <th class="py-2.5 px-3">Tanggal Opt-Out</th>
+                                <th class="py-2.5 px-3 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="blacklist-table-body" class="divide-y divide-slate-100">
+                            <tr>
+                                <td colspan="5" class="py-8 text-center text-slate-400">Memuat data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-3 sm:p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <span id="bl-total-count" class="font-semibold text-slate-600">0 nomor terdaftar</span>
+                <button type="button" onclick="closeBlacklistModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition">
+                    Tutup
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -1316,11 +1387,112 @@ function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
 }
 
+// ─── BLACKLIST / OPT-OUT MODAL FUNCTIONS ───
+window.openBlacklistModal = function() {
+    $('#modal-blacklist').removeClass('hidden');
+    loadBlacklistData();
+};
+
+window.closeBlacklistModal = function() {
+    $('#modal-blacklist').addClass('hidden');
+};
+
+function loadBlacklistData() {
+    $('#blacklist-table-body').html('<tr><td colspan="5" class="py-8 text-center text-slate-400">Memuat data...</td></tr>');
+    $.ajax({
+        url: BASEURL + '/broadcast/blacklists',
+        type: 'GET',
+        dataType: 'json',
+        success: function(res) {
+            if (res.status === 'success') {
+                const list = res.data || [];
+                $('#bl-total-count').text(list.length + ' nomor terdaftar');
+                if (list.length === 0) {
+                    $('#blacklist-table-body').html('<tr><td colspan="5" class="py-8 text-center text-slate-400">Belum ada nomor yang di-blacklist atau membalas STOP.</td></tr>');
+                    return;
+                }
+                let html = '';
+                list.forEach((item, idx) => {
+                    html += `<tr class="hover:bg-slate-50/80 transition">
+                        <td class="py-2.5 px-3 font-semibold text-slate-500">${idx + 1}</td>
+                        <td class="py-2.5 px-3 font-mono font-bold text-slate-800">+${escapeHtml(item.phone)}</td>
+                        <td class="py-2.5 px-3 text-slate-600 max-w-xs truncate">${escapeHtml(item.reason || 'Opt-out (Balas STOP)')}</td>
+                        <td class="py-2.5 px-3 text-slate-400 text-[11px]">${escapeHtml(item.created_at || '-')}</td>
+                        <td class="py-2.5 px-3 text-right">
+                            <button type="button" onclick="deleteBlacklist(${item.id}, '${escapeHtml(item.phone)}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition text-[11px] cursor-pointer" title="Hapus dari Blacklist (Buka Blokir)">
+                                Hapus
+                            </button>
+                        </td>
+                    </tr>`;
+                });
+                $('#blacklist-table-body').html(html);
+            }
+        },
+        error: function() {
+            $('#blacklist-table-body').html('<tr><td colspan="5" class="py-8 text-center text-rose-500">Gagal memuat data.</td></tr>');
+        }
+    });
+}
+
+function submitAddBlacklist(e) {
+    e.preventDefault();
+    const phone = $('#bl-phone-input').val();
+    const reason = $('#bl-reason-input').val();
+    if (!phone) return;
+
+    $.ajax({
+        url: BASEURL + '/broadcast/add_blacklist',
+        type: 'POST',
+        data: { phone: phone, reason: reason },
+        dataType: 'json',
+        success: function(res) {
+            if (res.status === 'success') {
+                $('#bl-phone-input').val('');
+                $('#bl-reason-input').val('');
+                loadBlacklistData();
+                Swal.fire({ icon: 'success', title: 'Berhasil', text: res.message, timer: 1500, showConfirmButton: false });
+            } else {
+                Swal.fire('Gagal', res.message, 'error');
+            }
+        }
+    });
+}
+
+function deleteBlacklist(id, phone) {
+    Swal.fire({
+        title: 'Hapus dari Blacklist?',
+        text: 'Nomor +' + phone + ' akan dapat menerima pesan broadcast kembali.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: BASEURL + '/broadcast/delete_blacklist',
+                type: 'POST',
+                data: { id: id },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.status === 'success') {
+                        loadBlacklistData();
+                        Swal.fire({ icon: 'success', title: 'Terhapus', text: res.message, timer: 1500, showConfirmButton: false });
+                    } else {
+                        Swal.fire('Gagal', res.message, 'error');
+                    }
+                }
+            });
+        }
+    });
+}
+
 <?php if ($runningCampaigns > 0): ?>
 // Live Polling otomatis setiap 5 detik saat campaign sedang berjalan
 if (typeof window.registerInterval === 'function') {
     window.registerInterval(function() {
-        if (window.location.href.includes('/broadcast') && !$('.swal2-shown').length && $('#modal-history-recipients').hasClass('hidden') && $('#modal-edit-campaign').hasClass('hidden')) {
+        if (window.location.href.includes('/broadcast') && !$('.swal2-shown').length && $('#modal-history-recipients').hasClass('hidden') && $('#modal-edit-campaign').hasClass('hidden') && $('#modal-blacklist').hasClass('hidden')) {
             $.ajax({
                 url: BASEURL + '/broadcast',
                 type: 'GET',

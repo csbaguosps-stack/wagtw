@@ -58,6 +58,15 @@ class Broadcast_model {
             $campaignId = $this->db->lastInsertId();
 
             if ($campaignId) {
+                // Fetch blacklisted / opted-out phone numbers for anti-spam protection
+                $this->db->query("SELECT phone FROM broadcast_blacklists");
+                $blacklistedRows = $this->db->resultSet();
+                $blacklistedPhones = [];
+                foreach ($blacklistedRows as $br) {
+                    $clean = preg_replace('/[^0-9]/', '', $br['phone'] ?? '');
+                    if ($clean) $blacklistedPhones[$clean] = true;
+                }
+
                 // Batch insert recipients in chunks of 100 for high speed and reliability
                 $chunks = array_chunk($recipients, 100);
                 foreach ($chunks as $chunk) {
@@ -68,14 +77,21 @@ class Broadcast_model {
                         $name = trim($row['name'] ?? '');
                         if (empty($phone)) continue;
 
-                        $placeholders[] = "(:cid_{$idx}, :phone_{$idx}, :name_{$idx}, 'pending')";
-                        $params["cid_{$idx}"] = $campaignId;
-                        $params["phone_{$idx}"] = $phone;
-                        $params["name_{$idx}"] = $name;
+                        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+                        $isBlacklisted = isset($blacklistedPhones[$cleanPhone]);
+                        $status = $isBlacklisted ? 'failed' : 'pending';
+                        $errMsg = $isBlacklisted ? 'Dilewati: Nomor berada di daftar Opt-Out / Blacklist' : null;
+
+                        $placeholders[] = "(:cid_{$idx}, :phone_{$idx}, :name_{$idx}, :status_{$idx}, :err_{$idx})";
+                        $params["cid_{$idx}"]    = $campaignId;
+                        $params["phone_{$idx}"]  = $phone;
+                        $params["name_{$idx}"]   = $name;
+                        $params["status_{$idx}"] = $status;
+                        $params["err_{$idx}"]    = $errMsg;
                     }
 
                     if (!empty($placeholders)) {
-                        $sql = "INSERT INTO campaign_recipients (campaign_id, phone, name, status) VALUES " . implode(', ', $placeholders);
+                        $sql = "INSERT INTO campaign_recipients (campaign_id, phone, name, status, error_msg) VALUES " . implode(', ', $placeholders);
                         $this->db->query($sql);
                         foreach ($params as $k => $v) {
                             $this->db->bind($k, $v);
@@ -226,5 +242,33 @@ class Broadcast_model {
         $this->db->query("SELECT * FROM campaign_recipients WHERE campaign_id = :id ORDER BY id ASC");
         $this->db->bind('id', $campaignId);
         return $this->db->resultSet();
+    }
+
+    public function getBlacklists()
+    {
+        $this->db->query("SELECT * FROM broadcast_blacklists ORDER BY id DESC");
+        return $this->db->resultSet();
+    }
+
+    public function addBlacklist($phone, $reason = 'Manual Admin')
+    {
+        $clean = preg_replace('/[^0-9]/', '', $phone);
+        if (strpos($clean, '0') === 0) $clean = '62' . substr($clean, 1);
+        elseif (strpos($clean, '8') === 0 && strlen($clean) >= 9) $clean = '62' . $clean;
+
+        if (empty($clean) || strlen($clean) < 9) return false;
+
+        $this->db->query("INSERT INTO broadcast_blacklists (phone, reason, created_at) VALUES (:phone, :reason, NOW()) ON DUPLICATE KEY UPDATE reason = :reason_up");
+        $this->db->bind('phone', $clean);
+        $this->db->bind('reason', $reason);
+        $this->db->bind('reason_up', $reason);
+        return $this->db->execute();
+    }
+
+    public function removeBlacklist($id)
+    {
+        $this->db->query("DELETE FROM broadcast_blacklists WHERE id = :id");
+        $this->db->bind('id', $id);
+        return $this->db->execute();
     }
 }
