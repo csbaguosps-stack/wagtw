@@ -12,46 +12,46 @@
   <img src="assets/img/dashboard.png" alt="WAGTW Dashboard" width="100%">
 </p>
 
-**WAGTW** adalah platform WhatsApp Gateway modern berbasis **PHP MVC (Native)** dan **Node.js Baileys Engine v7 (WebSocket murni tanpa Chromium/Puppeteer)**. Sistem ini sangat hemat RAM dan CPU, stabil, serta siap digunakan untuk multi-device WhatsApp, broadcast marketing, auto-responder otomatis, dan integrasi AI cerdas (Groq Llama 3) dengan fitur pencarian web realtime.
+**WAGTW** is a modern, enterprise-grade WhatsApp Gateway and marketing automation platform built with **PHP MVC (Native)** and **Node.js Baileys Engine v7 (pure WebSocket without Chromium/Puppeteer overhead)**. It is extremely lightweight, CPU/RAM efficient, stable, and battle-tested for multi-device management, high-volume broadcasting, intelligent auto-replies, and AI integration (Groq Llama 3) with real-time web search capabilities.
 
 ---
 
-## 🎯 Panduan Cepat Memulai untuk Pemula (Quick Start)
+## 🎯 Quick Start Guide for Beginners
 
-Jika Anda baru pertama kali mengunduh proyek ini, ikuti **4 langkah mudah** berikut untuk langsung menjalankannya di komputer Anda (Localhost XAMPP):
+If you are setting up the project for the first time, follow these **4 simple steps** to get it running locally on XAMPP:
 
-```
+```text
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ 1. Download /   │ ──> │ 2. Import DB    │ ──> │ 3. Setting .env │ ──> │ 4. Start Engine │
-│    Clone Repo   │     │    database.sql │     │    & npm install│     │    & Buka Web   │
+│ 1. Download /   │ ──> │ 2. Import DB    │ ──> │ 3. Setup .env   │ ──> │ 4. Start Engine │
+│    Clone Repo   │     │    database.sql │     │    & npm install│     │    & Launch Web │
 └─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
-### Langkah 1: Download atau Clone Proyek
-* **Cara Git**: Buka terminal/CMD, lalu jalankan:
+### Step 1: Download or Clone the Repository
+* **Using Git**: Open your terminal/command prompt and run:
   ```bash
   git clone https://github.com/csbaguosps-stack/wagtw.git
   ```
-  *(Letakkan folder di dalam direktori `htdocs`, misal `C:\xampp\htdocs\wagtw`)*
-* **Cara Download ZIP**: Klik tombol hijau **`<> Code`** di GitHub > pilih **Download ZIP** > lalu ekstrak ke `htdocs/wagtw`.
+  *(Clone it inside your web server root, e.g., `C:\xampp\htdocs\wagtw`)*
+* **Using ZIP**: Click the green **`<> Code`** button on GitHub > select **Download ZIP** > extract the archive into `htdocs/wagtw`.
 
-### Langkah 2: Import Database MySQL
-1. Pastikan modul **Apache** dan **MySQL** di XAMPP sudah menyala (**Start**).
-2. Buka browser, akses phpMyAdmin di: `http://localhost/phpmyadmin`
-3. Buat database baru dengan nama: `wagtw`
-4. Klik database `wagtw`, buka tab **Import**, pilih file:
-   👉 **`database.sql`** *(berada langsung di folder utama proyek)*
-5. Klik **Go / Kirim**.
+### Step 2: Import MySQL Database
+1. Make sure **Apache** and **MySQL** modules in XAMPP are running (**Start**).
+2. Open your web browser and navigate to phpMyAdmin: `http://localhost/phpmyadmin`
+3. Create a new database named: `wagtw`
+4. Select the `wagtw` database, open the **Import** tab, and choose:
+   👉 **`database.sql`** *(located in the project root directory)*
+5. Click **Go / Import**.
 
-> 🔑 **Akun Super Administrator Bawaan**:
+> 🔑 **Default Super Administrator Credentials**:
 > - **Username**: `admin`
 > - **Password**: `password`
-> *(Akun ini sudah otomatis dibuat oleh file `database.sql`)*
+> *(This account is seeded automatically by `database.sql`)*
 
-### Langkah 3: Konfigurasi File `.env` & Install Node.js Modul
-1. Masuk ke folder `server`:
-   - Copy file `.env.example` lalu ubah namanya menjadi `.env`.
-   - Buka file `server/.env` dan sesuaikan koneksi database Anda (default XAMPP tanpa password):
+### Step 3: Configure `.env` & Install Node.js Dependencies
+1. Navigate to the `server` directory:
+   - Duplicate `.env.example` and rename it to `.env`.
+   - Open `server/.env` and update your database credentials if necessary (default XAMPP has no password):
      ```env
      WA_ENGINE_PORT=3001
      API_SECRET_TOKEN=wagtw_secret_token_2024
@@ -61,54 +61,54 @@ Jika Anda baru pertama kali mengunduh proyek ini, ikuti **4 langkah mudah** beri
      DB_PASS=""
      DB_NAME=wagtw
      ```
-2. Pastikan komputer Anda sudah terpasang **Node.js** (download di [nodejs.org](https://nodejs.org) jika belum punya).
-3. Buka Terminal / CMD di dalam folder `server`, lalu jalankan:
+2. Ensure you have **Node.js** installed on your system (download from [nodejs.org](https://nodejs.org) if needed).
+3. Open terminal/cmd in the `server` directory and run:
    ```cmd
    cd server
    npm install
    ```
-   *(Tunggu beberapa saat sampai modul Baileys & Express selesai diunduh).*
+   *(Wait until Baileys and Express dependencies finish installing).*
 
-### Langkah 4: Jalankan Engine & Buka Web
-1. **Nyalakan WhatsApp Engine**:
-   - Buka folder `server`, cukup **klik dua kali** file:
-     👉 **`start_engine.bat`** (atau ketik `node server.js` di terminal).
-   - Biarkan jendela CMD tersebut tetap terbuka selama sistem digunakan.
-2. **Buka Web Dashboard**:
-   - Buka browser dan buka alamat:
+### Step 4: Start Engine & Open the Dashboard
+1. **Start the WhatsApp Engine**:
+   - Inside the `server` directory, **double-click**:
+     👉 **`start_engine.bat`** (or run `node server.js` in terminal).
+   - Keep this terminal window open while using WAGTW.
+2. **Access Web Dashboard**:
+   - Open your browser and go to:
      ```
      http://localhost/wagtw/public
      ```
-   - Login dengan: `admin` / `password`.
-3. **Hubungkan WhatsApp**:
-   - Buka menu **Devices** > Klik **+ Tambah Device** > Klik **Scan QR**.
-   - Buka WhatsApp di HP Anda > **Perangkat Tertaut** > **Tautkan Perangkat** > Scan QR code di layar.
-   - Selesai! WhatsApp Anda telah terhubung dan siap digunakan. 🎉
+   - Login with: `admin` / `password`.
+3. **Link Your WhatsApp Account**:
+   - Go to **Devices** > Click **+ Add Device** > Click **Scan QR**.
+   - Open WhatsApp on your phone > **Linked Devices** > **Link a Device** > Scan the QR code on your screen.
+   - You're ready to go! Your device is now connected. 🎉
 
 ---
 
-## 🧠 Memahami Cara Kerja Sistem WAGTW
+## 🧠 System Architecture & Workflow
 
-Aplikasi ini menggunakan perpaduan arsitektur modern yang memisahkan antara antarmuka web dan mesin WhatsApp:
+WAGTW uses a decoupled architecture separating the user-facing web dashboard and the background WhatsApp engine:
 
 ```text
-  [ Pengguna / Admin ]
+  [ User / Administrator ]
           │
           ▼  (HTTP / Browser)
  ┌─────────────────────────────────────────────────────────────┐
  │  PHP MVC Web Application (Port 80 / Apache / Nginx)        │
  │  - Routing: public/index.php -> app/core/App.php            │
- │  - UI: Tailwind CSS, jQuery AJAX SPA (tanpa reload), Alerts │
- │  - Database: MySQL (PDO) menyimpan kontak, campaign, log    │
+ │  - UI: Tailwind CSS, jQuery AJAX SPA (seamless navigation)  │
+ │  - Database: MySQL (PDO) persists campaigns, logs, devices  │
  └──────────────────────────────┬──────────────────────────────┘
                                 │
                                 ▼ (Internal HTTP REST API)
  ┌─────────────────────────────────────────────────────────────┐
  │  Node.js Baileys v7 Engine (Port 3001)                      │
  │  - File: server/server.js                                   │
- │  - Menjaga koneksi socket WhatsApp secara realtime (RAM)    │
- │  - Menangani pesan masuk/keluar, broadcast delay, webhook   │
- │  - Menghubungkan Chatbot AI (Groq Llama 3) & Web Search     │
+ │  - Maintains active WhatsApp WebSocket sessions in memory   │
+ │  - Handles incoming/outgoing messages, batch queues, alerts │
+ │  - Bridges Groq AI (Llama 3) & Real-time Web Search        │
  └──────────────────────────────┬──────────────────────────────┘
                                 │
                                 ▼ (WebSocket Protocol)
@@ -117,202 +117,230 @@ Aplikasi ini menggunakan perpaduan arsitektur modern yang memisahkan antara anta
 
 ---
 
-## 🌟 Fitur Unggulan
+## 🌟 Key Features
 
-- ⚡ **Engine Cepat & Hemat Resource (Baileys v7)**: Berjalan murni via protokol WebSocket WhatsApp, mendukung LID (Linked ID), tanpa browser Chromium/Puppeteer sehingga hemat memori (hanya butuh RAM rendah).
-- 📱 **Multi-Device & Multi-Session**: Mendukung koneksi banyak nomor WhatsApp sekaligus secara independen.
-- 🤖 **Smart AI Assistant (Groq & Web Search)**: Integrasi model AI (Llama 3, Mixtral) dengan auto-switch key, prompt kustom, dan live web browsing (DuckDuckGo, Bing, Google Search).
-- 💬 **Auto-Reply Fleksibel**: Pengaturan respon otomatis berdasarkan pencocokan kata (*exact match*, *contains*, *regex*, dan *spintax* dengan simulasi mengetik).
-- 📢 **Broadcast & Campaign Scheduler**: Kirim pesan massal dengan personalisasi nama, import data kontak via Excel/CSV, dan jeda pengiriman dinamis anti-banned.
-- 🌐 **Modern SPA-like UI**: Antarmuka responsif dan elegan dengan Tailwind CSS, pembaruan otomatis via jQuery AJAX (tanpa refresh browser), DataTables, dan SweetAlert2.
-- 🔗 **REST API & Webhook**: Dokumentasi API lengkap untuk pengiriman pesan teks/media dan penerusan pesan masuk ke sistem pihak ketiga.
-- 🛡️ **Proteksi Keamanan Berlapis**: Dilengkapi aturan `.htaccess` anti-akses core, pencegah eksekusi script pada folder upload, dan pemisahan file rahasia `.env`.
+- ⚡ **Ultra-Fast & Lightweight Baileys v7 Engine**: Runs purely via WhatsApp's native WebSocket protocol with full Linked ID (LID) support. Zero Chromium/Puppeteer overhead ensures minimal RAM and CPU utilization.
+- 📱 **Multi-Device & Multi-Session**: Connect and operate multiple independent WhatsApp numbers simultaneously from a single dashboard.
+- 🤖 **Smart AI Assistant (Groq & Web Search)**: Deep integration with LLaMA 3.3 and Mixtral models, featuring automatic API key rotation, custom business system prompts, and live web browsing (Google, Bing, DuckDuckGo).
+- 💬 **Flexible Auto-Responder**: Configure automated replies using exact match, partial contains, regex matching, spintax word spinning, and simulated typing delays.
+- 📢 **Smart Broadcast & Anti-Ban Marketing Engine**:
+  - Personalized recipient variables (`[Name]`, `[Phone]`, `[Salam]`, `[Date]`, `[Time]`, `[UniqueId]`).
+  - Recursive Spintax support (`{Hello|Hi|Greetings}`).
+  - Excel (.xlsx, .xls) and CSV contact imports.
+  - Multi-layer anti-ban protection with batch pacing and cooling periods.
+- 🚫 **Automated Opt-Out & Blacklist Management**:
+  - Automatically captures incoming opt-out keywords (`STOP`, `UNSUBSCRIBE`, `BERHENTI`).
+  - Instantly blacklists contacts, cancels pending queues, and sends a polite automated confirmation.
+  - Converts potential recipient reports into friendly 2-way interactions, preventing 90% of account bans.
+- 🌐 **Modern SPA-Like Interface**: Sleek Tailwind CSS design with smooth AJAX partial page updates (no full reloads), responsive modals, DataTables, and SweetAlert2 notifications.
+- 🔗 **REST API & Webhooks**: Comprehensive API endpoints for sending text, media, documents, and forwarding incoming messages to your external webhooks.
+- 🛡️ **Hardened Security**: Includes strict `.htaccess` rules preventing direct access to core files, script execution prevention in upload folders, and isolated `.env` credentials.
 
 ---
 
-## 📁 Struktur Direktori Proyek
+## 📁 Directory Structure
 
 ```text
 wagtw/
-├── app/                  # Core MVC Aplikasi PHP
-│   ├── config/config.php # Konfigurasi database & auto-detect URL
-│   ├── controllers/      # Logika controller (Auth, Device, Broadcast, AI, dll)
-│   ├── core/             # Framework MVC (App, Controller, Database)
-│   ├── models/           # Query database & manipulasi data
-│   ├── views/            # Tampilan antarmuka HTML/Tailwind
-│   └── .htaccess         # Keamanan: Memblokir akses langsung ke folder app
-├── assets/               # Aset Dokumentasi & Media
-│   └── img/dashboard.png # Tangkapan layar antarmuka dashboard WAGTW
-├── public/               # Web Document Root (Aset Publik)
-│   ├── index.php         # Pintu masuk (entry point) aplikasi
-│   ├── js/               # main.js (SPA engine) & Tailwind CSS offline
-│   ├── templates/        # Contoh format file broadcast (CSV & Excel)
-│   ├── uploads/          # Folder upload logo & foto profil (anti-webshell)
-│   └── .htaccess         # Konfigurasi Apache mod_rewrite
+├── app/                  # PHP MVC Core
+│   ├── config/config.php # Database & auto-detected BASEURL settings
+│   ├── controllers/      # MVC Controllers (Auth, Device, Broadcast, AI, etc.)
+│   ├── core/             # Framework Core (App router, Controller, Database PDO)
+│   ├── models/           # Data models and database queries
+│   ├── views/            # UI Views (Tailwind CSS templates)
+│   └── .htaccess         # Security: Blocks direct HTTP access to app core
+├── assets/               # Documentation & media assets
+│   └── img/dashboard.png # Dashboard screenshot
+├── public/               # Web Document Root
+│   ├── index.php         # Application entry point
+│   ├── js/               # main.js (SPA engine) & offline Tailwind CSS
+│   ├── templates/        # Broadcast sample template files (CSV & Excel)
+│   ├── uploads/          # User uploads directory (secured against webshells)
+│   └── .htaccess         # Apache mod_rewrite URL routing
 ├── server/               # WhatsApp Engine (Node.js)
-│   ├── server.js         # API Server & WebSocket Baileys
-│   ├── groq.js           # Helper integrasi Chatbot AI Groq
-│   ├── search.js         # Helper pencarian web realtime
-│   ├── migration.sql     # Skema database MySQL cadangan
-│   ├── .env.example      # Template konfigurasi environment
-│   └── start_engine.bat  # Script auto-restart loop untuk Windows
-├── database.sql          # File SQL lengkap + Super Admin siap import
-├── build_cpanel_zip.bat  # Script pembuat bundle zip bersih untuk cPanel
-├── LICENSE               # Lisensi MIT (Coding by cs.baguosps@gmail.com)
-├── README.md             # Dokumentasi instalasi dan penggunaan
-└── wagtw_cpanel_ready.zip# Arsip bersih siap hosting (~380 KB)
+│   ├── server.js         # REST API server & Baileys WebSocket engine
+│   ├── groq.js           # Groq AI chatbot integration helper
+│   ├── search.js         # Real-time search engine helper
+│   ├── migration.sql     # Database migration schema
+│   ├── .env.example      # Environment configuration template
+│   └── start_engine.bat  # Auto-restart runner script for Windows
+├── database.sql          # Full database schema with seeded Super Admin
+├── build_cpanel_zip.bat  # Utility to package clean ZIP for cPanel hosting
+├── LICENSE               # MIT License
+└── README.md             # Project documentation
 ```
 
 ---
 
-## 📋 Persyaratan Sistem
+## 📋 System Requirements
 
-Pastikan lingkungan server Anda memenuhi spesifikasi berikut:
+Ensure your server or hosting environment meets the following specifications:
 
-| Komponen | Spesifikasi Minimum | Rekomendasi |
+| Component | Minimum Specification | Recommended |
 | :--- | :--- | :--- |
-| **Sistem Operasi** | Windows 10/11, Ubuntu 20.04+, Debian 11+ | Ubuntu 22.04 LTS / 24.04 LTS |
-| **Web Server** | Apache 2.4+ (`mod_rewrite` aktif) atau Nginx | Nginx / Apache |
-| **PHP** | PHP 7.4 | PHP 8.1 atau PHP 8.2 |
-| **Ekstensi PHP** | `pdo_mysql`, `curl`, `mbstring`, `fileinfo`, `json` | Aktif bawaan PHP |
-| **Database** | MySQL 5.7+ atau MariaDB 10.3+ | MySQL 8.0 / MariaDB 10.6+ |
-| **Node.js** | Node.js 20.x LTS | Node.js 22.x LTS (Direkomendasikan) |
+| **Operating System** | Windows 10/11, Ubuntu 20.04+, Debian 11+ | Ubuntu 22.04 LTS / 24.04 LTS |
+| **Web Server** | Apache 2.4+ (`mod_rewrite` enabled) or Nginx | Apache / Nginx |
+| **PHP** | PHP 7.4 | PHP 8.1 or PHP 8.2 |
+| **PHP Extensions** | `pdo_mysql`, `curl`, `mbstring`, `fileinfo`, `json` | Enabled by default in PHP |
+| **Database** | MySQL 5.7+ or MariaDB 10.3+ | MySQL 8.0 / MariaDB 10.6+ |
+| **Node.js** | Node.js 20.x LTS | Node.js 22.x LTS (Recommended) |
 
 ---
 
-## 🛠️ Panduan Instalasi Node.js
+## 🛠️ Node.js Installation Guide
 
-Node.js bertugas menjalankan WhatsApp Engine (`server.js`). Sangat direkomendasikan menggunakan **Node.js versi 22.x LTS** untuk kestabilan protokol WebSocket dan Baileys v7 terbaru.
+The WhatsApp Engine (`server.js`) requires Node.js. We strongly recommend **Node.js 22.x LTS** for optimum WebSocket stability with Baileys v7.
 
-### A. Instalasi Node.js di Windows (Localhost / XAMPP)
-
-1. Kunjungi situs resmi Node.js: [https://nodejs.org](https://nodejs.org)
-2. Unduh versi **LTS (Long Term Support)** installer `.msi` (contoh: `v22.x.x LTS` - Direkomendasikan).
-3. Jalankan file `.msi`:
-   - Klik **Next** dan setujui License Agreement.
-   - Pada pilihan opsi, pastikan **Add to PATH** dicentang (aktif default).
-   - Klik **Install** hingga selesai (**Finish**).
-4. Buka **Command Prompt (CMD)** atau **PowerShell**, lalu cek versi:
+### A. Windows (Localhost / XAMPP)
+1. Visit the official Node.js website: [https://nodejs.org](https://nodejs.org)
+2. Download the **LTS (Long Term Support)** installer `.msi` (e.g., `v22.x.x LTS`).
+3. Run the installer:
+   - Accept the license agreement.
+   - Keep default settings and ensure **Add to PATH** is checked.
+   - Complete the installation (**Finish**).
+4. Verify in **Command Prompt** or **PowerShell**:
    ```cmd
    node -v
    npm -v
    ```
-   *Jika versi muncul (misal: `v22.11.0`), Node.js berhasil terpasang.*
 
 ---
 
-### B. Instalasi Node.js di Linux Ubuntu / Debian (VPS Dedicated)
-
-Jalankan perintah berikut via SSH terminal:
+### B. Linux (Ubuntu / Debian VPS)
+Run the following commands via SSH:
 
 ```bash
-# 1. Update package list & install curl
+# 1. Update package list & install prerequisites
 sudo apt update && sudo apt install -y curl build-essential
 
-# 2. Tambahkan repo NodeSource Node.js 22.x LTS (Direkomendasikan)
+# 2. Add NodeSource Node.js 22.x LTS repository
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 
 # 3. Install Node.js
 sudo apt install -y nodejs
 
-# 4. Verifikasi instalasi
+# 4. Verify installation
 node -v
 npm -v
 
-# 5. Install PM2 (Process Manager agar engine berjalan 24/7 di background)
+# 5. Install PM2 (Process Manager to run the engine 24/7 in background)
 sudo npm install -g pm2
+
+# 6. Start WAGTW Engine with PM2
+cd /path/to/wagtw/server
+pm2 start server.js --name wagtw-engine
+pm2 save
+pm2 startup
 ```
 
 ---
 
-### C. Instalasi Node.js di cPanel Hosting
-
-1. Masuk ke dashboard **cPanel** hosting Anda.
-2. Cari dan klik menu **Setup Node.js App** (CloudLinux).
-3. Klik tombol **Create Application**:
-   - **Node.js version**: Pilih `22.x` (Direkomendasikan) atau `20.x`
-   - **Application mode**: `Production`
-   - **Application root**: Isi `server`
-   - **Application startup file**: Isi `server.js`
-4. Klik **Create**.
-5. Pada bagian konfigurasi aplikasi, klik tombol **Run NPM Install** untuk memasang seluruh dependensi.
-
----
-
-## 📱 Panduan Penggunaan Fitur
-
-### 1. Menautkan Nomor WhatsApp (Scan QR)
-1. Buka menu **Devices** di sidebar.
-2. Klik tombol **+ Tambah Device**, beri nama (misal: *CS Layanan Pelanggan*).
-3. Klik tombol **Scan QR**.
-4. Buka aplikasi WhatsApp di Smartphone Anda:
-   - Android: Ketuk titik tiga kanan atas > **Perangkat Tertaut** > **Tautkan Perangkat**.
-   - iPhone: Masuk ke Pengaturan > **Perangkat Tertaut** > **Tautkan Perangkat**.
-5. Arahkan kamera HP ke QR Code pada layar.
-6. Status device akan otomatis berganti menjadi **Connected**.
-
-### 2. Balasan Otomatis (Auto-Reply)
-1. Buka menu **Autoreply**.
-2. Klik **Tambah Autoreply**:
-   - Pilih device yang merespons.
-   - Masukkan **Trigger Word** (kata kunci).
-   - Tentukan tipe pencocokan: `Exact` (sama persis) atau `Contains` (mengandung kata).
-   - Tulis teks balasan. Anda dapat mengaktifkan opsi simulasi mengetik (*typing indicator*).
-3. Klik **Simpan**.
-
-### 3. Mengaktifkan AI Smart Assistant
-1. Buka menu **Server AI**:
-   - Masukkan API Key Groq Anda (dapatkan gratis di [console.groq.com](https://console.groq.com)).
-   - Pilih model (contoh: `llama-3.3-70b-versatile` atau `llama3-8b-8192`).
-   - Tulis instruksi prompt bisnis Anda.
-2. Aktifkan fitur **Web Search** jika ingin AI mencari info harga atau berita terbaru secara otomatis dari Google, Bing, atau DuckDuckGo.
-
-### 4. Kirim Pesan Massal (Broadcast Campaign dengan Perlindungan Anti-Banned)
-1. Buka menu **Broadcast** > **Buat Broadcast**.
-2. Download template CSV/Excel yang tersedia, isi daftar nomor tujuan, lalu upload kembali.
-3. Tulis pesan dengan tag dinamis (`[Name]`, `[Salam]`, `[Time]`, `[Date]`, `[UniqueId]`) dan variasi Spintax `{Hai|Halo|Salam}`.
-4. Tentukan rentang jeda aman (minimal 8–25 detik) dan fitur **Batch Pacing** (contoh: kirim 20 pesan, lalu istirahat 5 menit).
-5. Klik **Mulai Pengiriman**. Engine akan menyimulasikan status mengetik manusiawi dan menyuntikkan watermark anti-hash otomatis pada tiap pesan.
+### C. cPanel Hosting (CloudLinux Node.js Selector)
+1. Log into your **cPanel** dashboard.
+2. Open **Setup Node.js App**.
+3. Click **Create Application**:
+   - **Node.js version**: Choose `22.x` (Recommended) or `20.x`.
+   - **Application mode**: `Production`.
+   - **Application root**: `server`.
+   - **Application startup file**: `server.js`.
+4. Click **Create**.
+5. Click **Run NPM Install** to install dependencies.
+6. The app will automatically run via Phusion Passenger.
 
 ---
 
-## ❓ FAQ & Mengatasi Kendala (Troubleshooting)
+## 📱 Feature Guide
 
-### Q: QR Code tidak muncul atau muter terus saat diklik?
-**Penyebab**: WhatsApp Engine Node.js (`server.js`) belum berjalan di port 3001.
-**Solusi**:
-- Pastikan jendela CMD dari file `server/start_engine.bat` (atau `node server.js`) sudah berjalan dan menampilkan pesan *"WAGTW Node Engine running on port 3001"*.
-- Jika di cPanel, pastikan aplikasi Node.js berstatus **Started**.
+### 1. Linking a WhatsApp Account (Scan QR)
+1. Go to **Devices** in the sidebar.
+2. Click **+ Add Device**, enter a descriptive name (e.g., *Support Hotline*).
+3. Click **Scan QR**.
+4. Open WhatsApp on your phone:
+   - Android: Tap three dots top right > **Linked Devices** > **Link a Device**.
+   - iPhone: Settings > **Linked Devices** > **Link a Device**.
+5. Point your camera at the QR code on your screen.
+6. The status will update to **Connected** automatically.
 
-### Q: Muncul Error 404 saat mengklik menu di sidebar?
-**Penyebab**: Modul Apache `mod_rewrite` belum aktif atau file `.htaccess` tidak terbaca.
-**Solusi**:
-- Di XAMPP, buka file `httpd.conf`, cari baris `LoadModule rewrite_module modules/mod_rewrite.so`, dan pastikan tanda pagar (`#`) di depannya sudah dihapus.
-- Pastikan file `.htaccess` di root dan di folder `public/` sudah ada.
+### 2. Auto-Reply Configuration
+1. Go to **Autoreply**.
+2. Click **Add Autoreply**:
+   - Select the device to respond.
+   - Enter your **Trigger Word / Keyword**.
+   - Choose matching type: `Exact` (exact match) or `Contains` (substring match).
+   - Compose the response message. You can enable typing simulation indicator.
+3. Click **Save**.
+
+### 3. Setting Up the AI Smart Assistant
+1. Go to **AI Servers**:
+   - Enter your Groq API Key (free from [console.groq.com](https://console.groq.com)).
+   - Select model (e.g., `llama-3.3-70b-versatile` or `llama3-8b-8192`).
+   - Write your custom business instructions / persona.
+2. Enable **Web Search** if you want the bot to automatically lookup real-time pricing, news, or search results via Google, Bing, or DuckDuckGo.
+
+### 4. Sending Broadcast Campaigns with Anti-Ban Protection
+1. Go to **Broadcast** > **Create Broadcast**.
+2. Download the sample Excel/CSV template, paste your contacts, and upload.
+3. Write your message using dynamic variables (`[Name]`, `[Salam]`, `[Time]`, `[Date]`, `[UniqueId]`) and Spintax variations `{Hi|Hello|Good day}`.
+4. Select a **Security Profile**:
+   - 🛡️ **Ultra Safe (Recommended)**: 20-45s delay • 15 messages batch with 10 min cooling period.
+   - ⚖️ **Standard**: 15-30s delay • 25 messages batch with 5 min cooling period.
+   - ⚡ **Fast**: 10-20s delay (recommended only for existing mutual contacts).
+5. Keep **Include Unsubscribe Footer ("Reply STOP")** checked to protect against spam complaints.
+6. Click **Launch Broadcast**.
+
+---
+
+## 🔒 Advanced WhatsApp Anti-Ban Architecture
+
+WAGTW implements an advanced 7-layer defense system designed around Meta's automated integrity filters:
+
+1. **Anti-Report Opt-Out System (Primary Ban Defense)**:  
+   Over 90% of automated WhatsApp bans occur when recipients tap the *"Report Spam"* button. WAGTW appends a friendly opt-out footer (`Reply STOP to unsubscribe`). When a recipient replies with `STOP` or `UNSUBSCRIBE`:
+   - The engine captures the keyword instantly.
+   - The phone number is added to `broadcast_blacklists`.
+   - All pending broadcasts to that contact are automatically canceled.
+   - A polite confirmation message is sent back, establishing a legitimate 2-way conversation that boosts the account's trust score in Meta's algorithm.
+2. **Elimination of Bulk `onWhatsApp` Discovery Queries**:  
+   Traditional bulk senders repeatedly query `onWhatsApp(jid)` (`usync` IQ query) before sending. Meta flags this pattern as a *Directory Harvesting Attack*. WAGTW dispatches messages directly, letting WhatsApp server validate routing natively and catching errors safely in code.
+3. **Official Windows Desktop Browser Signature**:  
+   Instead of headless Linux fingerprints (`Ubuntu Chrome 22.04`) that trigger bot detection on cloud VPS servers, WAGTW identifies itself as `Browsers.windows('Desktop')`, identical to official WhatsApp desktop client traffic.
+4. **Humanized Presence Flow**:  
+   Simulates natural user behavior:
+   `Online (available)` ➔ `1.0-2.5s Reading/Opening Delay` ➔ `Typing (composing) proportional to message length` ➔ `Send Message` ➔ `Paused`.
+5. **Zero-Width Cryptographic Anti-Hash Watermarking**:  
+   Injects invisible zero-width characters into each outgoing message. The message appears identical to human recipients but possesses a unique SHA-256 cryptographic hash, bypassing content-based duplicate spam filters.
+6. **Dynamic Delays & Batch Pacing (Cooling Periods)**:  
+   Enforces a minimum delay threshold (15s+) supplemented with random Gaussian jitter (±1-2s). Periodic batch cooling breaks prevent velocity threshold triggers.
+7. **Circuit Breaker on Consecutive Failures**:  
+   If 5 consecutive numbers fail or the session disconnects, the campaign automatically pauses, preventing a bad contact list from damaging your WhatsApp reputation.
+
+---
+
+## ❓ Troubleshooting & FAQ
+
+### Q: QR Code doesn't appear or keeps spinning?
+**Cause**: The Node.js WhatsApp Engine (`server.js`) is not running on port 3001.  
+**Solution**:
+- Ensure `server/start_engine.bat` (or `node server.js`) is running and displays the startup banner.
+- On cPanel, verify that the Node.js application status is **Started**.
+
+### Q: 404 Not Found error when clicking sidebar links?
+**Cause**: Apache `mod_rewrite` is disabled or `.htaccess` is not being read.  
+**Solution**:
+- In XAMPP, open `httpd.conf`, search for `LoadModule rewrite_module modules/mod_rewrite.so`, and ensure it is not commented out with `#`.
+- Ensure `AllowOverride All` is set for your directory in Apache config.
+- Verify that `.htaccess` exists in both root and `public/` directories.
 
 ### Q: Database Connection Error?
-**Penyebab**: File `server/.env` belum dibuat atau password MySQL salah.
-**Solusi**:
-- Cek kembali file `server/.env`. Di XAMPP standar, `DB_USER=root` dan `DB_PASS=""` (kosongkan tanpa spasi).
+**Cause**: `server/.env` is missing or MySQL credentials are misconfigured.  
+**Solution**:
+- Verify `server/.env`. On default XAMPP setups, set `DB_USER=root` and `DB_PASS=""` (empty string).
 
 ---
 
-## 🔒 Tips Keamanan & Fitur Perlindungan Anti-Banned WhatsApp
+## 📄 License & Attribution
 
-Sistem WAGTW telah dilengkapi arsitektur perlindungan anti-banned berlapis:
-
-1. **Anti-Duplicate Content Ban (Injeksi Zero-Width Watermark)**: Engine otomatis menyisipkan karakter zero-width tak terlihat pada setiap pesan terkirim. Pesan tampak sama persis di HP penerima, namun memiliki hash SHA-256 unik yang mengelabui filter deteksi spam massal Meta.
-2. **Simulasi Mengetik Manusiawi (Humanized Typing Presence)**: Sebelum mengirim pesan, sistem mengaktifkan status *"sedang mengetik..."* selama 2.5–6 detik secara adaptif sesuai panjang teks, meniru perilaku manusia asli.
-3. **Batch Pacing (Istirahat Berkala)**: Mengirim non-stop adalah pemicu utama pemblokiran akun. Gunakan fitur batch pacing (misal: kirim 20 pesan, lalu istirahat 5–10 menit) untuk mendinginkan reputasi akun WhatsApp.
-4. **Jeda Pengiriman Aman (Delay Minimum Terproteksi)**: Engine mengunci delay pengiriman minimal 8 detik ke atas dengan jitter acak agar ritme pesan tidak seragam seperti robot.
-5. **Circuit Breaker Nomor Invalid**: Jika terjadi beberapa kegagalan nomor tak terdaftar beruntun, engine otomatis mengambil jeda pendinginan (cooling-off) agar tidak terindikasi sebagai bot scraping.
-6. **Warming Up Nomor Baru**: Nomor WhatsApp baru jangan langsung digunakan untuk blast ribuan pesan. Naikkan volume secara bertahap dalam 1–2 minggu pertama.
-
----
-
-## 📄 Lisensi & Hak Cipta
-
-Proyek ini dilindungi di bawah lisensi resmi **MIT License**.
+This project is licensed under the **MIT License**.
 
 ```text
 MIT License
@@ -322,6 +350,6 @@ Coding by: cs.baguosps@gmail.com
 Project: WAGTW - WhatsApp Multi-Device Gateway & AI Marketing Platform
 ```
 
-Untuk konsultasi teknis, kolaborasi, atau kustomisasi fitur, silakan hubungi:
+For technical consultations, custom development, or enterprise support:
 - **Email**: [cs.baguosps@gmail.com](mailto:cs.baguosps@gmail.com)
 - **GitHub Repository**: [https://github.com/csbaguosps-stack/wagtw](https://github.com/csbaguosps-stack/wagtw)
