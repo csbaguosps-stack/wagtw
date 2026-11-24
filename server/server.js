@@ -817,9 +817,9 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                 await unmuteContact(deviceId, remotePhone, senderJid);
                 const reactivatedText = `🤖 *Bot AI telah diaktifkan kembali* untuk percakapan ini. Silakan tanyakan apa saja! 😊`;
                 
-                // Tampilkan simulasi mengetik singkat
+                // Tampilkan simulasi mengetik singkat yang responsif
                 await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-                await new Promise(r => setTimeout(r, 1200));
+                await new Promise(r => setTimeout(r, 600));
 
                 try {
                     const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText }, { quoted: fullMsg });
@@ -844,9 +844,9 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                     ? aiConfig.ai_handoff_text.trim()
                     : `Baik, permintaan Anda telah kami teruskan ke *Admin / Staf kami* 👤\n\nAdmin kami akan segera membaca dan merespons chat Anda secara langsung. Sementara ini, Bot AI dinonaktifkan untuk percakapan ini dan akan aktif kembali besok hari.\n\nTerima kasih atas kesabaran Anda! 🙏`;
 
-                // Tampilkan simulasi mengetik singkat
+                // Tampilkan simulasi mengetik singkat yang responsif
                 await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-                await new Promise(r => setTimeout(r, 1500));
+                await new Promise(r => setTimeout(r, 600));
 
                 try {
                     let sentMsg = null;
@@ -982,9 +982,9 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
 
         if (matched) {
             keywordMatched = true;
-            const configuredDelay = (rule.delay || 1) * 1000;
-            // Simulasi mengetik manusia (minimal 1.5 detik agar tampak sedang mengetik)
-            const typingDuration = Math.max(configuredDelay, 1500);
+            const configuredDelay = (rule.delay !== undefined && rule.delay !== null) ? (rule.delay * 1000) : 1000;
+            // Simulasi mengetik singkat yang responsif (500ms - 1500ms)
+            const typingDuration = Math.min(1500, Math.max(500, configuredDelay));
 
             await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
             await new Promise(r => setTimeout(r, typingDuration));
@@ -1028,6 +1028,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
     // ── MODE AI: Gunakan Groq ─────────────────────────────────────────────────
     if (aiEnabled) {
         console.log(`[AI] Device ${deviceId} — Mode AI aktif, menghubungi Groq...`);
+        const aiStartTime = Date.now();
 
         // Tampilkan indikator mengetik selama AI berpikir
         await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
@@ -1201,25 +1202,18 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 }
             }
 
-            // ── SIMULASI MENGETIK MANUSIA (HUMANIZED TYPING DELAY) ────────────
-            // Menghitung durasi mengetik yang natural berdasarkan panjang teks balasan
-            // Kecepatan mengetik manusia: ~25ms per karakter + jeda acak (jitter 800-2000ms)
-            const charDelay = Math.floor(aiReply.length * 25);
-            const jitter = Math.floor(Math.random() * 1200) + 800;
-            const typingDuration = Math.min(6500, Math.max(2500, charDelay + jitter));
+            // ── SIMULASI MENGETIK RESPONSIF & ALAMI ───────────────────────────
+            // Karena status 'composing' sudah aktif selama Groq berpikir (~1-1.5 detik),
+            // kita hanya butuh jeda mengetik tambahan yang singkat (300ms - 800ms)
+            // agar total waktu respon bot tetap lincah (~1.8 - 2.5 detik) dan tidak membuat pelanggan menunggu lama.
+            const elapsedAiTime = Date.now() - aiStartTime;
+            const targetTotalDuration = Math.min(2200, Math.max(1500, Math.floor(aiReply.length * 3)));
+            const remainingDelay = Math.max(300, targetTotalDuration - elapsedAiTime);
+            const typingDuration = Math.min(800, remainingDelay);
 
-            console.log(`[AI TYPING] Mensimulasikan mengetik ke ${senderJid} (${aiReply.length} karakter, jeda ${typingDuration}ms)...`);
+            console.log(`[AI TYPING] Mengetik ke ${senderJid} (${aiReply.length} karakter, jeda ${typingDuration}ms, total ~${elapsedAiTime + typingDuration}ms)...`);
             await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-
-            // Jika durasi lebih dari 3 detik, perbarui status 'composing' di tengah jeda agar tidak timeout di WhatsApp
-            if (typingDuration > 3000) {
-                const halfDelay = Math.floor(typingDuration / 2);
-                await new Promise(r => setTimeout(r, halfDelay));
-                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-                await new Promise(r => setTimeout(r, typingDuration - halfDelay));
-            } else {
-                await new Promise(r => setTimeout(r, typingDuration));
-            }
+            await new Promise(r => setTimeout(r, typingDuration));
 
             try {
                 let sentMsg = null;
