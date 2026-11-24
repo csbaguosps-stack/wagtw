@@ -554,6 +554,10 @@ $years = range(intval(date('Y')) - 2, intval(date('Y')) + 3);
                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                                         💬 Minta Chat Admin
                                     </span>
+                                <?php elseif ($mc['reason'] === 'ai_server_down' || $mc['reason'] === 'ai_error'): ?>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                        ⚠️ AI Mati / Error (Auto-Retry)
+                                    </span>
                                 <?php else: ?>
                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                                         👤 Admin Menjawab
@@ -727,9 +731,12 @@ $(document).ready(function() {
         $('#checkAllMuted').prop('disabled', false);
 
         list.forEach(mc => {
-            const reasonBadge = mc.reason === 'chat_admin' 
-                ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">💬 Minta Chat Admin</span>'
-                : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">👤 Admin Menjawab</span>';
+            let reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">👤 Admin Menjawab</span>';
+            if (mc.reason === 'chat_admin') {
+                reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">💬 Minta Chat Admin</span>';
+            } else if (mc.reason === 'ai_server_down' || mc.reason === 'ai_error') {
+                reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">⚠️ AI Mati / Error (Auto-Retry)</span>';
+            }
 
             const expiredBadge = mc.muted_until 
                 ? `<span class="font-mono text-gray-700 bg-gray-100 px-2 py-0.5 rounded">${mc.muted_until}</span>`

@@ -607,16 +607,16 @@ async function cleanupExpiredMutedContacts() {
             const lastMsgs = await dbQuery(`
                 SELECT id, from_phone, to_phone, direction, message, created_at 
                 FROM messages 
-                WHERE (from_phone = ? AND to_phone = ?) OR (from_phone = ? AND to_phone = ?)
+                WHERE device_id = ? AND (from_phone = ? OR to_phone = ? OR from_phone LIKE ? OR to_phone LIKE ?)
                 ORDER BY id DESC LIMIT 1
-            `, [customerPhone, myPhone, myPhone, customerPhone]);
+            `, [row.device_id, customerPhone, customerPhone, `%${customerPhone}%`, `%${customerPhone}%`]);
 
             if (lastMsgs && lastMsgs.length > 0) {
                 const lastMsg = lastMsgs[0];
-                // Jika pesan terakhir berarah MASUK (direction = 'in'), artinya belum dibalas oleh admin!
+                // Jika pesan terakhir berarah MASUK (direction = 'in'), artinya belum dibalas oleh admin / AI!
                 if (lastMsg.direction === 'in' && lastMsg.message && lastMsg.message.trim()) {
                     const pendingText = lastMsg.message.trim();
-                    console.log(`[AI AUTO-FOLLOWUP] Kontak ${customerPhone} belum dibalas admin selama timeout. AI otomatis menjawab: "${pendingText.substring(0, 50)}..."`);
+                    console.log(`[AI AUTO-FOLLOWUP] Kontak ${customerPhone} belum dibalas admin/AI selama periode mute (${row.reason}). AI otomatis membalas: "${pendingText.substring(0, 50)}..."`);
 
                     let senderJid = customerPhone.includes('@') 
                         ? customerPhone 
@@ -731,9 +731,18 @@ function isEndConversationKeyword(text, keywordSetting) {
 /**
  * Hitung nilai Date untuk muted_until berdasarkan konfigurasi durasi device
  */
-function calculateMutedUntil(durationSetting) {
+function calculateMutedUntil(durationSetting, reason = null) {
     const now = new Date();
+
+    // Jika AI mati / API error, tetapi durasi diatur ke 'manual' atau 'next_day',
+    // berikan waktu retry default (1 menit) agar pesan pelanggan otomatis di-retry saat AI pulih
+    if ((reason === 'ai_server_down' || reason === 'ai_error') && (durationSetting === 'manual' || durationSetting === 'next_day')) {
+        return new Date(now.getTime() + 1 * 60 * 1000); // 1 Menit retry default
+    }
+
     switch (durationSetting) {
+        case '1_minute':
+            return new Date(now.getTime() + 1 * 60 * 1000);
         case '5_minutes':
             return new Date(now.getTime() + 5 * 60 * 1000);
         case '15_minutes':
@@ -757,7 +766,7 @@ function calculateMutedUntil(durationSetting) {
         case 'next_day':
             return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
         default:
-            // Format custom manual: misal "custom_10m" (10 menit) atau "custom_2h" (2 jam)
+            // Format custom manual: misal "custom_1m" (1 menit), "custom_10m" (10 menit) atau "custom_2h" (2 jam)
             if (typeof durationSetting === 'string' && durationSetting.startsWith('custom_')) {
                 const raw = durationSetting.replace('custom_', '').trim();
                 if (raw.endsWith('m')) {
@@ -850,7 +859,7 @@ async function muteContact(deviceId, phone, reason = 'chat_admin') {
             [deviceId]
         );
         const durationSetting = aiSets.length && aiSets[0].ai_reactivate_duration ? aiSets[0].ai_reactivate_duration : 'next_day';
-        const mutedUntilDate = calculateMutedUntil(durationSetting);
+        const mutedUntilDate = calculateMutedUntil(durationSetting, reason);
         const mutedUntilSql = formatDateToSql(mutedUntilDate);
 
         await dbQuery(
@@ -883,8 +892,8 @@ async function touchMutedContact(deviceId, phone) {
         );
         const durationSetting = aiSets.length && aiSets[0].ai_reactivate_duration ? aiSets[0].ai_reactivate_duration : 'next_day';
 
-        if (durationSetting.includes('_hour') || durationSetting.includes('_minute') || durationSetting.startsWith('custom_')) {
-            const newUntil = calculateMutedUntil(durationSetting);
+        if (durationSetting.includes('_hour') || durationSetting.includes('_minute') || durationSetting.startsWith('custom_') || rows[0].reason === 'ai_server_down' || rows[0].reason === 'ai_error') {
+            const newUntil = calculateMutedUntil(durationSetting, rows[0].reason);
             const newUntilSql = formatDateToSql(newUntil);
             await dbQuery(
                 'UPDATE ai_muted_contacts SET muted_until = ?, updated_at = NOW() WHERE id = ?',
@@ -1168,17 +1177,37 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
             // Tampilkan indikator mengetik selama AI berpikir
             await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
 
-            // Ambil 8 pesan terakhir untuk context history dari Baileys Store
-            const historyMsgs = session.store?.messages[senderJid]?.array?.slice(-8) || [];
-
-            let chatContext = historyMsgs.map(msg => {
-                const isFromMe = msg.key.fromMe;
-                const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-                return {
-                    role: isFromMe ? 'assistant' : 'user',
-                    content: text
-                };
-            }).filter(c => c.content);
+            try {
+                // Ambil 8 pesan terakhir untuk context history dari Baileys Store atau Database
+                let chatContext = [];
+                const historyMsgs = session.store?.messages[senderJid]?.array?.slice(-8) || [];
+                if (historyMsgs.length > 0) {
+                    chatContext = historyMsgs.map(msg => {
+                        const isFromMe = msg.key.fromMe;
+                        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                        return {
+                            role: isFromMe ? 'assistant' : 'user',
+                            content: text
+                        };
+                    }).filter(c => c.content);
+                } else {
+                    try {
+                        const dbMsgs = await dbQuery(`
+                            SELECT direction, message 
+                            FROM messages 
+                            WHERE device_id = ? AND (from_phone = ? OR to_phone = ?)
+                            ORDER BY id DESC LIMIT 8
+                        `, [deviceId, remotePhone, remotePhone]);
+                        if (dbMsgs && dbMsgs.length > 0) {
+                            chatContext = dbMsgs.reverse().map(m => ({
+                                role: m.direction === 'out' ? 'assistant' : 'user',
+                                content: m.message
+                            })).filter(c => c.content);
+                        }
+                    } catch (dbHistErr) {
+                        console.warn('[AI Context DB Error]', dbHistErr.message);
+                    }
+                }
 
             // Pastikan pesan terakhir dalam konteks selalu pesan yang baru masuk (role: user)
             // Groq membutuhkan prompt terakhir berasal dari user.
@@ -1406,9 +1435,17 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 return; // Selesai, jangan lanjut ke autoreply biasa
             } else {
                 await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                console.warn('[AI] Semua server Groq gagal, fallback ke autoreply keyword...');
+                console.warn(`[AI FAILED] Semua server AI gagal/mati untuk device ${deviceId}. Me-mute kontak ${remotePhone} secara otomatis ke status Bot Mute agar ditangani staf / di-retry otomatis...`);
+                await muteContact(deviceId, remotePhone, 'ai_server_down');
+                return;
             }
+        } catch (aiErr) {
+            await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+            console.error(`[AI ERROR] Terjadi kesalahan saat memproses AI untuk device ${deviceId}:`, aiErr.message);
+            await muteContact(deviceId, remotePhone, 'ai_server_down');
+            return;
         }
+    }
     } finally {
         // Lepas lock aktifitas autoreply untuk sender ini
         activeReplyLocks.delete(lockKey);
