@@ -189,30 +189,56 @@ async function authMiddleware(req, res, next) {
 }
 
 // ─── Database Pool ────────────────────────────────────────────────────────────
+const isHostingEnv = (typeof (PhusionPassenger) !== 'undefined') ||
+                     __dirname.includes('winseeop') ||
+                     __dirname.includes('wagtw.winseeoptik.com') ||
+                     process.env.USER === 'winseeop' ||
+                     (process.env.HOME && process.env.HOME.includes('winseeop')) ||
+                     process.platform === 'linux';
+
+const hostingDbUser = 'winseeop_wagtw';
+const hostingDbPass = 'winseeop_wagtw';
+const hostingDbName = 'winseeop_wagtw';
+
+let initialDbHost = process.env.DB_HOST || 'localhost';
+let initialDbUser = process.env.DB_USER || (isHostingEnv ? hostingDbUser : 'root');
+let initialDbPass = (process.env.DB_PASS !== undefined) ? process.env.DB_PASS : (isHostingEnv ? hostingDbPass : '');
+let initialDbName = process.env.DB_NAME || (isHostingEnv ? hostingDbName : 'wagtw');
+
+// Jika terdeteksi di lingkungan hosting cPanel namun env masih bernilai 'root' atau 'wagtw'
+if (isHostingEnv && (initialDbUser === 'root' || initialDbName === 'wagtw')) {
+    initialDbUser = hostingDbUser;
+    initialDbPass = hostingDbPass;
+    initialDbName = hostingDbName;
+}
+
 let db = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASS || '',
-    database: process.env.DB_NAME || 'wagtw',
+    host: initialDbHost,
+    user: initialDbUser,
+    password: initialDbPass,
+    database: initialDbName,
     charset: 'utf8mb4',
     waitForConnections: true,
     connectionLimit: 10,
 });
 
-// Auto-test and fallback to local root if hosting credentials are configured in .env but server runs locally
+// Auto-test and fallback between hosting credentials and local root
 (async () => {
     try {
         await db.query('SELECT 1');
         await db.query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-        console.log(`[DB] Connected successfully to database: ${process.env.DB_NAME || 'wagtw'} (charset: utf8mb4)`);
+        console.log(`[DB] Connected successfully to database: ${initialDbName} (user: ${initialDbUser}, charset: utf8mb4)`);
     } catch (err) {
-        console.warn(`[DB] Primary connection to "${process.env.DB_NAME || 'wagtw'}" failed (${err.code}). Trying local fallback (root@localhost/wagtw)...`);
+        console.warn(`[DB] Primary connection (${initialDbUser}@${initialDbHost}/${initialDbName}) failed (${err.code}). Trying fallback...`);
+        const fallbackUser = (initialDbUser === hostingDbUser) ? 'root' : hostingDbUser;
+        const fallbackPass = (initialDbUser === hostingDbUser) ? '' : hostingDbPass;
+        const fallbackName = (initialDbUser === hostingDbUser) ? 'wagtw' : hostingDbName;
         try {
             const fallbackDb = mysql.createPool({
                 host: 'localhost',
-                user: 'root',
-                password: '',
-                database: 'wagtw',
+                user: fallbackUser,
+                password: fallbackPass,
+                database: fallbackName,
                 charset: 'utf8mb4',
                 waitForConnections: true,
                 connectionLimit: 10,
@@ -220,7 +246,7 @@ let db = mysql.createPool({
             await fallbackDb.query('SELECT 1');
             await fallbackDb.query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
             db = fallbackDb;
-            console.log('[DB] Fallback connected successfully to local database: wagtw (charset: utf8mb4)');
+            console.log(`[DB] Fallback connected successfully to: ${fallbackName} (user: ${fallbackUser}, charset: utf8mb4)`);
         } catch (fbErr) {
             console.error('[DB Fatal] Could not connect to primary or fallback database:', fbErr.message);
         }

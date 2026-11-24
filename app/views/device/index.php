@@ -158,6 +158,13 @@ if ($dbModels) {
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
                             Scan QR
                         </button>
+                        <?php else: ?>
+                        <button onclick="scanQR('<?= htmlspecialchars($dev['session_id']) ?>', true)"
+                                title="Tautkan Ulang / Ganti Akun WhatsApp"
+                                class="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95">
+                            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                            Scan Ulang
+                        </button>
                         <?php endif; ?>
 
                         <!-- Disconnect -->
@@ -807,6 +814,23 @@ if ($dbModels) {
                     $('#engineBadge').attr('class', 'inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-100 px-3 py-1.5 rounded-full')
                         .html('<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Engine Online');
                     $('#engineOfflineWarning').removeClass('flex').addClass('hidden');
+
+                    if (res.sessions && typeof res.sessions === 'object') {
+                        $('tr[data-session-id]').each(function () {
+                            const sid = $(this).data('session-id');
+                            const s = res.sessions[sid];
+                            const badge = $(this).find('.dev-status-badge');
+                            if (!badge.length) return;
+
+                            if (s && s.status === 'connected') {
+                                badge.html('<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 border-emerald-200 text-emerald-700"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>Terhubung</span>');
+                            } else if (s && s.status === 'qr') {
+                                badge.html('<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-sky-50 border-sky-200 text-sky-700"><span class="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse"></span>Scan QR</span>');
+                            } else {
+                                badge.html('<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-rose-50 border-rose-200 text-rose-700"><span class="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>Terputus</span>');
+                            }
+                        });
+                    }
                 } else {
                     $('#engineBadge').attr('class', 'inline-flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-100 px-3 py-1.5 rounded-full')
                         .html('<span class="w-2 h-2 bg-red-500 rounded-full"></span> Engine Offline');
@@ -913,8 +937,15 @@ if ($dbModels) {
             dataType: 'json',
             success(res) {
                 if (res.status === 'need_qr') {
-                    Swal.close();
-                    scanQR(sessionId, false);
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Perlu Scan QR',
+                        text: 'Kredensial WhatsApp belum tersimpan atau sesi terputus. Membuka scanner QR Code...',
+                        timer: 1600,
+                        showConfirmButton: false
+                    }).then(() => {
+                        scanQR(sessionId, false);
+                    });
                 } else {
                     Swal.fire({
                         icon: res.status === 'success' ? 'success' : 'info',

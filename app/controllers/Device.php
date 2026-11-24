@@ -88,8 +88,43 @@ class Device extends Controller {
         }
         $data['current_filter'] = $filterUser;
 
-        // engine_ok = null → dicek async oleh JS supaya page tidak lambat
-        $data['engine_ok'] = null;
+        // Sinkronisasi status socket riil Baileys Node Engine dengan database
+        $engineStatus = $this->callNode('GET', '/api/status');
+        $engineOnline = ($engineStatus && isset($engineStatus['status']) && $engineStatus['status'] === 'ok');
+        $data['engine_ok'] = $engineOnline;
+
+        if ($engineOnline && isset($engineStatus['activeSessions']) && is_array($engineStatus['activeSessions'])) {
+            $activeMap = [];
+            foreach ($engineStatus['activeSessions'] as $as) {
+                if (!empty($as['sessionId'])) {
+                    $activeMap[$as['sessionId']] = $as['status'] ?? 'unknown';
+                }
+            }
+
+            foreach ($data['devices'] as &$dev) {
+                $sid = $dev['session_id'];
+                $nodeState = $activeMap[$sid] ?? null;
+
+                if ($nodeState === 'connected') {
+                    if ($dev['status'] !== 'connected') {
+                        $this->model('Device_model')->updateStatus($sid, 'connected');
+                        $dev['status'] = 'connected';
+                    }
+                } elseif ($nodeState === 'qr') {
+                    if ($dev['status'] !== 'qr') {
+                        $this->model('Device_model')->updateStatus($sid, 'qr');
+                        $dev['status'] = 'qr';
+                    }
+                } else {
+                    // Sesi belum aktif di memori engine atau terputus
+                    if ($dev['status'] === 'connected') {
+                        $this->model('Device_model')->updateStatus($sid, 'disconnected');
+                        $dev['status'] = 'disconnected';
+                    }
+                }
+            }
+            unset($dev);
+        }
 
         if (isset($_GET['ajax']) && $_GET['ajax'] == 'true') {
             $this->view('device/index', $data);
@@ -107,7 +142,24 @@ class Device extends Controller {
         header('Content-Type: application/json');
         $result = $this->callNode('GET', '/api/status');
         $ok = ($result && isset($result['status']) && $result['status'] === 'ok');
-        echo json_encode(['engine_ok' => $ok]);
+        $sessions = [];
+
+        if ($ok && isset($result['activeSessions']) && is_array($result['activeSessions'])) {
+            foreach ($result['activeSessions'] as $as) {
+                if (!empty($as['sessionId'])) {
+                    $sessions[$as['sessionId']] = [
+                        'status' => $as['status'] ?? 'unknown',
+                        'phone'  => $as['phone'] ?? null,
+                        'hasQR'  => !empty($as['hasQR']),
+                    ];
+                }
+            }
+        }
+
+        echo json_encode([
+            'engine_ok' => $ok,
+            'sessions'  => $sessions
+        ]);
     }
 
     // ─── add() ───────────────────────────────────────────────────────────
@@ -509,6 +561,13 @@ class Device extends Controller {
         if ($result === null) {
             echo json_encode(['status' => 'engine_offline', 'message' => 'WAGTW Engine offline. Jalankan: node server.js']); return;
         }
+
+        if (isset($result['status']) && $result['status'] === 'need_qr') {
+            $this->model('Device_model')->updateStatus($sessionId, 'disconnected');
+        } elseif (isset($result['status']) && $result['status'] === 'success') {
+            // Reconnect dikirim
+        }
+
         echo json_encode($result);
     }
 
