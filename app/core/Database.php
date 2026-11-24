@@ -28,15 +28,15 @@ class Database {
         try {
             $this->dbh = new PDO($dsn, $this->user, $this->pass, $option);
         } catch(PDOException $e) {
-            // If primary connection failed and not using root, try local root fallback
-            if ($this->user !== 'root') {
+            // Hanya fallback ke root lokal jika benar-benar di lingkungan localhost (IS_LOCAL)
+            if (defined('IS_LOCAL') && IS_LOCAL && $this->user !== 'root') {
                 try {
                     $fallbackDsn = 'mysql:host=localhost;dbname=wagtw;charset=utf8mb4';
                     $this->dbh = new PDO($fallbackDsn, 'root', '', $option);
                     return;
                 } catch(PDOException $fb) {}
             }
-            die($e->getMessage());
+            die("Database Connection Error (" . htmlspecialchars($this->user) . "@" . htmlspecialchars($this->host) . "/" . htmlspecialchars($this->db_name) . "): " . $e->getMessage());
         }
     }
 

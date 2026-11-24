@@ -49,8 +49,8 @@ if (file_exists($envFile)) {
 }
 
 // ─── Environment & Database Auto-Detection ────────────────────────────────────
-$serverHost = $_SERVER['HTTP_HOST'] ?? '';
-$hostOnly = preg_replace('/:\d+$/', '', $serverHost);
+$serverHost = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? '');
+$hostOnly = strtolower(preg_replace('/:\d+$/', '', trim($serverHost)));
 
 $isPrivateIp = false;
 if (filter_var($hostOnly, FILTER_VALIDATE_IP)) {
@@ -61,14 +61,24 @@ if (filter_var($hostOnly, FILTER_VALIDATE_IP)) {
                    strpos($hostOnly, '127.') === 0;
 }
 
-$isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-$isLocal = ($isWindows ||
-            $hostOnly === 'localhost' || 
-            $hostOnly === '127.0.0.1' || 
-            $isPrivateIp ||
-            strpos($hostOnly, '192.168.') === 0 ||
-            strpos($hostOnly, '10.') === 0 ||
-            (function_exists('str_ends_with') && (str_ends_with($hostOnly, '.local') || str_ends_with($hostOnly, '.test'))));
+// Cek apakah host adalah domain publik (seperti wagtw.winseeoptik.com)
+$isProductionDomain = (strpos($hostOnly, 'winseeoptik.com') !== false);
+
+// Cek apakah lingkungan lokal (XAMPP localhost)
+$isLocalHost = ($hostOnly === 'localhost' || 
+                $hostOnly === '127.0.0.1' || 
+                $hostOnly === '::1' || 
+                $isPrivateIp ||
+                strpos($hostOnly, '192.168.') === 0 ||
+                strpos($hostOnly, '10.') === 0 ||
+                (function_exists('str_ends_with') && (str_ends_with($hostOnly, '.local') || str_ends_with($hostOnly, '.test'))));
+
+// Jika domain produksi atau bukan localhost/private IP, maka PASTI Production/Hosting
+$isLocal = !$isProductionDomain && $isLocalHost;
+
+if (!defined('IS_LOCAL')) {
+    define('IS_LOCAL', $isLocal);
+}
 
 if ($isLocal) {
     // Localhost XAMPP Settings
@@ -77,11 +87,11 @@ if ($isLocal) {
     define('DB_PASS', '');
     define('DB_NAME', 'wagtw');
 } else {
-    // Production / Hosting Settings (Diambil dari file server/.env dengan fallback default)
-    define('DB_HOST', $envConfig['DB_HOST'] ?? 'localhost');
-    define('DB_USER', $envConfig['DB_USER'] ?? 'winseeop_wagtw');
-    define('DB_PASS', $envConfig['DB_PASS'] ?? 'winseeop_wagtw');
-    define('DB_NAME', $envConfig['DB_NAME'] ?? 'winseeop_wagtw');
+    // Production / Hosting Settings (Diambil dari file server/.env dengan fallback default hosting)
+    define('DB_HOST', !empty($envConfig['DB_HOST']) ? $envConfig['DB_HOST'] : 'localhost');
+    define('DB_USER', !empty($envConfig['DB_USER']) ? $envConfig['DB_USER'] : 'winseeop_wagtw');
+    define('DB_PASS', isset($envConfig['DB_PASS']) && $envConfig['DB_PASS'] !== '' ? $envConfig['DB_PASS'] : 'winseeop_wagtw');
+    define('DB_NAME', !empty($envConfig['DB_NAME']) ? $envConfig['DB_NAME'] : 'winseeop_wagtw');
 }
 
 // ─── Node.js Baileys Engine API Settings ───────────────────────────────────────
