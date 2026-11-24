@@ -410,8 +410,7 @@ class Device extends Controller {
         } else {
             $models = [
                 'llama-3.3-70b-versatile' => 'LLaMA 3.3 70B Versatile (Cerdas)',
-                'llama-3.1-8b-instant'    => 'LLaMA 3.1 8B Instant (Cepat)',
-                'llama3-8b-8192'          => 'LLaMA 3 8B (Ringan)'
+                'llama-3.1-8b-instant'    => 'LLaMA 3.1 8B Instant (Cepat)'
             ];
         }
         

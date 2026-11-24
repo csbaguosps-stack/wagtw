@@ -273,7 +273,7 @@ pm2 startup
 ### 3. Setting Up the AI Smart Assistant
 1. Go to **AI Servers**:
    - Enter your Groq API Key (free from [console.groq.com](https://console.groq.com)).
-   - Select model (e.g., `llama-3.3-70b-versatile` or `llama3-8b-8192`).
+   - Select model (e.g., `llama-3.3-70b-versatile` or `llama-3.1-8b-instant`).
    - Write your custom business instructions / persona.
 2. Enable **Web Search** if you want the bot to automatically lookup real-time pricing, news, or search results via Google, Bing, or DuckDuckGo.
 

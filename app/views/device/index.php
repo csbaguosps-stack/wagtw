@@ -16,8 +16,8 @@ if ($dbModels) {
 } else {
     // Fallback if db is empty
     $groqModels = [
-        'llama3-8b-8192'           => 'LLaMA 3 8B (Cepat)',
-        'llama-3.3-70b-versatile'  => 'LLaMA 3.3 70B Versatile'
+        'llama-3.3-70b-versatile'  => 'LLaMA 3.3 70B Versatile',
+        'llama-3.1-8b-instant'     => 'LLaMA 3.1 8B Instant'
     ];
 }
 ?>
@@ -1123,7 +1123,8 @@ if ($dbModels) {
                     if(rMode === 'ai') rMode = 'auto'; // legacy conversion
                     $(`input[name="reply_mode"][value="${rMode}"]`).prop('checked', true);
 
-                    $('#aiModel').val(s.model || 'llama3-8b-8192');
+                    const activeModelVal = (s.model && s.model !== 'llama3-8b-8192' && s.model !== 'llama3-70b-8192') ? s.model : 'auto';
+                    $('#aiModel').val(activeModelVal);
                     $('#aiServerId').val(s.ai_server_id || '');
                     $('#aiBrand').val(s.brand || '');
                     $('#aiNameInput').val(s.ai_name || '');

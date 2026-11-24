@@ -1,6 +1,9 @@
 <?php
 // Note: $groqModels map is no longer needed since we manage AI Models in DB natively
-// Tab IDs: server, model, search, monitoring
+// Ambil model aktif teratas dari konfigurasi Model AI
+$activeAiModels = array_values(array_filter($data['models'] ?? [], fn($m) => !empty($m['is_active'])));
+$primaryActiveModel = !empty($activeAiModels) ? $activeAiModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+// Tab IDs: server, model, search, monitoring, history
 ?>
 
 <div class="space-y-6 max-w-5xl mt-4 px-4 pb-12">
@@ -98,7 +101,7 @@
                     <?php endif; ?>
                     
                     <div class="flex items-center gap-1.5">
-                        <button onclick="testApiKey(<?= $srv['id'] ?>, '<?= htmlspecialchars(addslashes($srv['api_key'])) ?>', '<?= htmlspecialchars(addslashes($srv['label'])) ?>')" class="p-2 text-amber-600 hover:bg-amber-100 bg-amber-50 rounded-xl transition shadow-xs" title="Test Status API Key"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></button>
+                        <button onclick="testApiKey(<?= $srv['id'] ?>, '<?= htmlspecialchars(addslashes($srv['api_key'])) ?>', '<?= htmlspecialchars(addslashes($srv['label'])) ?>', '<?= htmlspecialchars(addslashes($primaryActiveModel)) ?>')" class="p-2 text-amber-600 hover:bg-amber-100 bg-amber-50 rounded-xl transition shadow-xs" title="Test Status API Key (Model: <?= htmlspecialchars($primaryActiveModel) ?>)"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></button>
                         <button onclick="toggleActive(<?= $srv['id'] ?>)" class="p-2 <?= $srv['is_active'] ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-gray-400 bg-gray-50 hover:bg-gray-100' ?> rounded-xl transition shadow-xs" title="<?= $srv['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?>"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></button>
                         <button onclick="openEditModal(<?= $srv['id'] ?>)" class="p-2 text-blue-600 hover:bg-blue-100 bg-blue-50 rounded-xl transition shadow-xs" title="Edit"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>
                         <button onclick="deleteServer(<?= $srv['id'] ?>)" class="p-2 text-red-600 hover:bg-red-100 bg-red-50 rounded-xl transition shadow-xs" title="Hapus"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
@@ -483,7 +486,7 @@
         </div>
         <form id="form-key" class="p-6 space-y-5">
             <input type="hidden" name="id" id="key-id">
-            <input type="hidden" name="model" value="llama3-8b-8192"> <!-- Default hidden model, tak lagi dipakai -->
+            <input type="hidden" name="model" value="<?= htmlspecialchars($primaryActiveModel) ?>"> <!-- Mengikuti Model AI aktif -->
             
             <div>
                 <div class="flex items-center justify-between mb-1.5">
@@ -863,24 +866,35 @@ function toggleActive(id) {
 // Inisialisasi Pagination API Keys saat halaman selesai dimuat
 renderServerPagination();
 
-function testApiKey(id, apiKey, label) {
-    Swal.fire({ title: '⚡ Testing API Key...', text: 'Mengirim request ping ke Groq...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+function testApiKey(id, apiKey, label, modelName) {
+    const targetModel = modelName || '<?= htmlspecialchars(addslashes($primaryActiveModel)) ?>';
+    Swal.fire({
+        title: '⚡ Testing API Key...',
+        html: `<p class="text-sm text-gray-500">Mengirim request ping ke Groq...</p><p class="text-xs text-purple-600 font-mono mt-1 font-semibold">Model: ${targetModel}</p>`,
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
     const fd = new FormData();
     fd.append('api_key', apiKey);
-    fd.append('model', 'llama3-8b-8192');
+    fd.append('model', targetModel);
     if (id) fd.append('server_id', id);
     if (label) fd.append('label', label);
 
     fetch(BASEURL + '/aiserver/testApi', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(res => {
+            const testedModel = res.model || targetModel;
             if (res.status === 'success') {
-                Swal.fire({ icon: 'success', title: '✅ API Valid & Aktif!', text: res.message });
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ API Valid & Aktif!',
+                    html: `<div class="text-left text-sm"><p class="text-emerald-700 font-semibold mb-1">${res.message}</p><p class="text-xs text-gray-500">Model aktif diuji: <span class="font-mono font-bold text-gray-700">${testedModel}</span></p></div>`
+                });
             } else {
                 Swal.fire({
                     icon: 'error',
                     title: '❌ API Gagal / Mati!',
-                    html: `<div class="text-left text-sm"><p class="text-red-600 font-semibold mb-2">${res.message}</p><p class="text-xs text-gray-500">Error ini telah otomatis dicatat ke tab <strong>Riwayat API Mati</strong>.</p></div>`
+                    html: `<div class="text-left text-sm"><p class="text-red-600 font-semibold mb-2">${res.message}</p><p class="text-xs text-gray-500 mb-1">Model yang diuji: <span class="font-mono font-bold text-gray-700">${testedModel}</span></p><p class="text-xs text-gray-400">Error ini telah otomatis dicatat ke tab <strong>Riwayat API Mati</strong>.</p></div>`
                 });
                 if (res.log_count !== undefined) {
                     const b = document.getElementById('history-badge');

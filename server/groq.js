@@ -11,7 +11,7 @@ const https = require('https');
 /**
  * Call Groq API
  * @param {string} apiKey   — Groq API Key
- * @param {string} model    — Model ID (e.g. llama3-8b-8192)
+ * @param {string} model    — Model ID (e.g. llama-3.3-70b-versatile)
  * @param {string} sysPrompt — System prompt / rules
  * @param {Array} chatHistory  — Array of objects: [{ role: 'user'|'assistant', content: '...' }]
  * @returns {Promise<string|null>}  — AI reply text or null on failure
@@ -19,7 +19,7 @@ const https = require('https');
 async function callGroq(apiKey, model, sysPrompt, chatHistory) {
     return new Promise((resolve) => {
         const payload = JSON.stringify({
-            model: model || 'llama3-8b-8192',
+            model: (model && model !== 'llama3-8b-8192') ? model : 'llama-3.3-70b-versatile',
             messages: [
                 ...(sysPrompt ? [{ role: 'system', content: sysPrompt }] : []),
                 ...(Array.isArray(chatHistory) ? chatHistory : [{ role: 'user', content: String(chatHistory) }]),

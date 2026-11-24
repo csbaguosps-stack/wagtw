@@ -1143,21 +1143,29 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 serversToTry = await dbQuery('SELECT * FROM ai_servers WHERE is_active = 1 ORDER BY priority DESC, id ASC');
             }
 
-            // ── Kumpulkan daftar model yang akan dicoba
+            // ── Kumpulkan daftar model yang akan dicoba (sesuai yang aktif di menu Model AI)
             let modelsToTry = [];
-            if (aiConfig.model && aiConfig.model !== 'auto') {
+            const decommModels = ['llama3-8b-8192', 'llama3-70b-8192', 'llama-3.1-70b-versatile'];
+
+            // Selalu utamakan model-model yang AKTIF di tabel ai_models sesuai prioritas
+            const activeDbModels = await dbQuery('SELECT model_name FROM ai_models WHERE is_active = 1 ORDER BY priority DESC, id ASC');
+            const activeModelNames = activeDbModels.map(m => m.model_name);
+
+            if (aiConfig.model && aiConfig.model !== 'auto' && !decommModels.includes(aiConfig.model) && activeModelNames.includes(aiConfig.model)) {
                 modelsToTry.push({ model_name: aiConfig.model });
+                for (const m of activeDbModels) {
+                    if (m.model_name !== aiConfig.model) {
+                        modelsToTry.push(m);
+                    }
+                }
+            } else if (activeDbModels.length > 0) {
+                modelsToTry = activeDbModels;
             } else {
-                modelsToTry = await dbQuery('SELECT * FROM ai_models WHERE is_active = 1 ORDER BY priority DESC, id ASC');
-                // Fallback jika tidak ada model di DB
-                if (modelsToTry.length === 0) modelsToTry.push({ model_name: 'llama3-8b-8192' });
+                // Fallback resmi jika belum ada model yang didaftarkan di Model AI
+                modelsToTry.push({ model_name: 'llama-3.3-70b-versatile' });
             }
 
             // ── Lakukan percobaan (Auto-Switch 2D)
-            console.log(`[DEBUG] aiConfig:`, aiConfig);
-            console.log(`[DEBUG] serversToTry length:`, serversToTry.length, serversToTry);
-            console.log(`[DEBUG] modelsToTry length:`, modelsToTry.length, modelsToTry);
-
             if (serversToTry.length === 0) {
                 console.warn(`[AI] Device ${deviceId} — Tidak ada API Key aktif (Server AI kosong)! Harap tambahkan API Key Groq di menu Server AI.`);
             }

@@ -52,7 +52,12 @@ class Aiserver extends Controller {
 
         $rawApiKey = trim($_POST['api_key'] ?? '');
         $rawLabel  = trim($_POST['label'] ?? '');
-        $model     = $_POST['model'] ?? 'llama3-8b-8192';
+        
+        // Utamakan model pertama yang aktif di Model AI
+        $activeModels = $this->model('AiServer_model')->getActiveModelsGlobal();
+        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+        $model        = (!empty($_POST['model']) && !in_array($_POST['model'], ['llama3-8b-8192', 'llama3-70b-8192'])) ? trim($_POST['model']) : $primaryModel;
+        
         $isActive  = isset($_POST['is_active']) ? 1 : 0;
         $priority  = intval($_POST['priority'] ?? 0);
 
@@ -132,7 +137,11 @@ class Aiserver extends Controller {
         $id        = intval($_POST['id'] ?? 0);
         $rawLabel  = trim($_POST['label'] ?? '');
         $apiKey    = trim($_POST['api_key'] ?? '');
-        $model     = $_POST['model'] ?? 'llama3-8b-8192';
+        
+        $activeModels = $this->model('AiServer_model')->getActiveModelsGlobal();
+        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+        $model        = (!empty($_POST['model']) && !in_array($_POST['model'], ['llama3-8b-8192', 'llama3-70b-8192'])) ? trim($_POST['model']) : $primaryModel;
+        
         $isActive  = isset($_POST['is_active']) ? 1 : 0;
         $priority  = intval($_POST['priority'] ?? 0);
 
@@ -389,9 +398,20 @@ class Aiserver extends Controller {
     {
         header('Content-Type: application/json');
         $apiKey   = trim($_POST['api_key'] ?? '');
-        $model    = $_POST['model'] ?? 'llama3-8b-8192';
+        $model    = trim($_POST['model'] ?? '');
         $serverId = intval($_POST['server_id'] ?? 0) ?: null;
         $label    = trim($_POST['label'] ?? 'Manual Test Key');
+
+        // Selalu ambil model-model yang aktif di tabel ai_models (Model AI)
+        $activeModels = $this->model('AiServer_model')->getActiveModelsGlobal();
+        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+        $activeModelNames = array_column($activeModels ?: [], 'model_name');
+
+        // Jika model kosong, atau decommissioned, atau tidak ada dalam daftar model aktif:
+        $decommissioned = ['llama3-8b-8192', 'llama3-70b-8192', 'llama-3.1-70b-versatile'];
+        if (empty($model) || in_array($model, $decommissioned) || (!empty($activeModelNames) && !in_array($model, $activeModelNames))) {
+            $model = $primaryModel;
+        }
 
         if (empty($apiKey)) {
             echo json_encode(['status' => 'error', 'message' => 'API Key kosong!']);
@@ -426,20 +446,20 @@ class Aiserver extends Controller {
             $errMsg = 'Tidak bisa terhubung ke Groq: ' . ($err ?: 'No response');
             $this->model('AiServer_model')->addLog($serverId, $label, $maskedKey, $model, 'CONN_ERR', $errMsg);
             $newCount = $this->model('AiServer_model')->getLogCount();
-            echo json_encode(['status' => 'error', 'message' => $errMsg, 'logged' => true, 'log_count' => $newCount]);
+            echo json_encode(['status' => 'error', 'message' => $errMsg, 'logged' => true, 'log_count' => $newCount, 'model' => $model]);
             return;
         }
 
         $result = json_decode($response, true);
         if ($httpCode === 200 && isset($result['choices'][0])) {
             $reply = $result['choices'][0]['message']['content'] ?? 'OK';
-            echo json_encode(['status' => 'success', 'message' => 'API Key valid! Respon: "' . $reply . '"']);
+            echo json_encode(['status' => 'success', 'message' => 'API Key valid! (Model diuji: ' . $model . ') Respon: "' . $reply . '"', 'model' => $model]);
         } else {
             $errMsg = $result['error']['message'] ?? ('HTTP ' . $httpCode . ' Error');
             $statusCode = $httpCode ? (string)$httpCode : 'ERR';
             $this->model('AiServer_model')->addLog($serverId, $label, $maskedKey, $model, $statusCode, $errMsg);
             $newCount = $this->model('AiServer_model')->getLogCount();
-            echo json_encode(['status' => 'error', 'message' => 'Groq Error (' . $statusCode . '): ' . $errMsg, 'logged' => true, 'log_count' => $newCount]);
+            echo json_encode(['status' => 'error', 'message' => 'Groq Error (' . $statusCode . '): ' . $errMsg, 'logged' => true, 'log_count' => $newCount, 'model' => $model]);
         }
     }
 
