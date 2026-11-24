@@ -4,7 +4,7 @@
  * ║   No Chrome / No Puppeteer - Pure WebSocket + LID          ║
  * ║                                                            ║
  * ║   Coding by: cs.baguosps@gmail.com                         ║
- * ║   Copyright (c) 2024-2026. All rights reserved.           ║
+ * ║   Copyright (c) 2024-2026. All rights reserved.            ║
  * ╚════════════════════════════════════════════════════════════╝
  */
 
@@ -816,7 +816,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                 console.log(`[AI UNMUTE] Kontak/Grup ${remotePhone} meminta reaktivasi Bot AI (Teks: '${incomingText}').`);
                 await unmuteContact(deviceId, remotePhone, senderJid);
                 const reactivatedText = `🤖 *Bot AI telah diaktifkan kembali* untuk percakapan ini. Silakan tanyakan apa saja! 😊`;
-                
+
                 // Tampilkan simulasi mengetik singkat yang responsif
                 await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
                 await new Promise(r => setTimeout(r, 600));
@@ -866,197 +866,197 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                 return; // Hentikan di sini, jangan jalankan AI atau autoreply
             }
 
-        // 3. CEK STATUS MUTE (Pribadi maupun Grup)
-        const isMuted = await isContactMuted(deviceId, remotePhone);
-        if (isMuted) {
-            console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
-            // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
-            await touchMutedContact(deviceId, remotePhone);
-            return; // Hentikan di sini, jangan membalas
-        }
-    }
-
-    // ── WHATSAPP BUSINESS FEATURES (Welcome & Away) ──────────────────────────
-    if (!isGroup) {
-        const devData = devices[0];
-
-        // 1. Welcome Message
-        if (devData.welcome_enabled == 1 && devData.welcome_message) {
-            const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
-            const historyCount = await dbQuery('SELECT COUNT(id) as cnt FROM messages WHERE from_phone = ? AND to_phone = ? AND created_at > ?', [remotePhone, myPhone, oneDayAgo]);
-            // Jika pesannya <= 1 (yaitu pesan yg baru masuk), berarti ini chat pertama dalam 1 hari
-            if (historyCount[0].cnt <= 1) {
-                console.log(`[BUSINESS] Mengirim Welcome Message ke ${remotePhone}`);
-                try {
-                    const sentMsg = await sock.sendMessage(senderJid, { text: devData.welcome_message }, { quoted: fullMsg });
-                    markBotSentMessage(sentMsg?.key?.id);
-                } catch (_) {
-                    const sentMsg = await sock.sendMessage(senderJid, { text: devData.welcome_message }).catch(() => { });
-                    markBotSentMessage(sentMsg?.key?.id);
-                }
+            // 3. CEK STATUS MUTE (Pribadi maupun Grup)
+            const isMuted = await isContactMuted(deviceId, remotePhone);
+            if (isMuted) {
+                console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
+                // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
+                await touchMutedContact(deviceId, remotePhone);
+                return; // Hentikan di sini, jangan membalas
             }
         }
 
-        // 2. Away Message
-        if (devData.away_enabled == 1 && devData.away_message && devData.work_hours) {
-            try {
-                const wh = JSON.parse(devData.work_hours);
-                const wibOffset = 7 * 60; // WIB
-                const nowUtc = new Date();
-                const nowWib = new Date(nowUtc.getTime() + wibOffset * 60 * 1000);
+        // ── WHATSAPP BUSINESS FEATURES (Welcome & Away) ──────────────────────────
+        if (!isGroup) {
+            const devData = devices[0];
 
-                const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-                const currentDay = days[nowWib.getUTCDay()];
-                const todaySchedule = wh[currentDay];
-
-                let isAway = false;
-                if (todaySchedule && todaySchedule.is_off) {
-                    isAway = true;
-                } else if (todaySchedule && todaySchedule.start && todaySchedule.end) {
-                    const jamWib = nowWib.getUTCHours();
-                    const menitWib = nowWib.getUTCMinutes();
-                    const currentMinutes = jamWib * 60 + menitWib;
-
-                    const [startH, startM] = todaySchedule.start.split(':').map(Number);
-                    const [endH, endM] = todaySchedule.end.split(':').map(Number);
-                    const startMinutes = startH * 60 + startM;
-                    const endMinutes = endH * 60 + endM;
-
-                    if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
-                        isAway = true;
+            // 1. Welcome Message
+            if (devData.welcome_enabled == 1 && devData.welcome_message) {
+                const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+                const historyCount = await dbQuery('SELECT COUNT(id) as cnt FROM messages WHERE from_phone = ? AND to_phone = ? AND created_at > ?', [remotePhone, myPhone, oneDayAgo]);
+                // Jika pesannya <= 1 (yaitu pesan yg baru masuk), berarti ini chat pertama dalam 1 hari
+                if (historyCount[0].cnt <= 1) {
+                    console.log(`[BUSINESS] Mengirim Welcome Message ke ${remotePhone}`);
+                    try {
+                        const sentMsg = await sock.sendMessage(senderJid, { text: devData.welcome_message }, { quoted: fullMsg });
+                        markBotSentMessage(sentMsg?.key?.id);
+                    } catch (_) {
+                        const sentMsg = await sock.sendMessage(senderJid, { text: devData.welcome_message }).catch(() => { });
+                        markBotSentMessage(sentMsg?.key?.id);
                     }
                 }
+            }
 
-                if (isAway) {
-                    // Anti-spam: Cek apakah sudah pernah kirim away message dalam 12 jam terakhir
-                    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
-                    const recentAway = await dbQuery(`SELECT id FROM messages WHERE from_phone = ? AND to_phone = ? AND direction = 'out' AND message = ? AND created_at > ? LIMIT 1`, [myPhone, remotePhone, devData.away_message, twelveHoursAgo]);
+            // 2. Away Message
+            if (devData.away_enabled == 1 && devData.away_message && devData.work_hours) {
+                try {
+                    const wh = JSON.parse(devData.work_hours);
+                    const wibOffset = 7 * 60; // WIB
+                    const nowUtc = new Date();
+                    const nowWib = new Date(nowUtc.getTime() + wibOffset * 60 * 1000);
 
-                    if (recentAway.length === 0) {
-                        console.log(`[BUSINESS] Mengirim Away Message ke ${remotePhone}`);
-                        try {
-                            const sentMsg = await sock.sendMessage(senderJid, { text: devData.away_message }, { quoted: fullMsg });
-                            markBotSentMessage(sentMsg?.key?.id);
-                        } catch (_) {
-                            const sentMsg = await sock.sendMessage(senderJid, { text: devData.away_message }).catch(() => { });
-                            markBotSentMessage(sentMsg?.key?.id);
+                    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+                    const currentDay = days[nowWib.getUTCDay()];
+                    const todaySchedule = wh[currentDay];
+
+                    let isAway = false;
+                    if (todaySchedule && todaySchedule.is_off) {
+                        isAway = true;
+                    } else if (todaySchedule && todaySchedule.start && todaySchedule.end) {
+                        const jamWib = nowWib.getUTCHours();
+                        const menitWib = nowWib.getUTCMinutes();
+                        const currentMinutes = jamWib * 60 + menitWib;
+
+                        const [startH, startM] = todaySchedule.start.split(':').map(Number);
+                        const [endH, endM] = todaySchedule.end.split(':').map(Number);
+                        const startMinutes = startH * 60 + startM;
+                        const endMinutes = endH * 60 + endM;
+
+                        if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
+                            isAway = true;
                         }
                     }
+
+                    if (isAway) {
+                        // Anti-spam: Cek apakah sudah pernah kirim away message dalam 12 jam terakhir
+                        const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+                        const recentAway = await dbQuery(`SELECT id FROM messages WHERE from_phone = ? AND to_phone = ? AND direction = 'out' AND message = ? AND created_at > ? LIMIT 1`, [myPhone, remotePhone, devData.away_message, twelveHoursAgo]);
+
+                        if (recentAway.length === 0) {
+                            console.log(`[BUSINESS] Mengirim Away Message ke ${remotePhone}`);
+                            try {
+                                const sentMsg = await sock.sendMessage(senderJid, { text: devData.away_message }, { quoted: fullMsg });
+                                markBotSentMessage(sentMsg?.key?.id);
+                            } catch (_) {
+                                const sentMsg = await sock.sendMessage(senderJid, { text: devData.away_message }).catch(() => { });
+                                markBotSentMessage(sentMsg?.key?.id);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('[BUSINESS] Gagal memproses Away Message:', e);
                 }
-            } catch (e) {
-                console.error('[BUSINESS] Gagal memproses Away Message:', e);
             }
         }
-    }
-    // ──────────────────────────────────────────────────────────────────────────
-    // ── MODE MANUAL / FALLBACK: Keyword Autoreply ─────────────────────────────
-    // Jika AI berhasil membalas, proses sudah berhenti (return) di atas.
-    // Jika sampai di sini, artinya AI mati ATAU AI gagal (fallback), maka jalankan keyword autoreply biasa.
+        // ──────────────────────────────────────────────────────────────────────────
+        // ── MODE MANUAL / FALLBACK: Keyword Autoreply ─────────────────────────────
+        // Jika AI berhasil membalas, proses sudah berhenti (return) di atas.
+        // Jika sampai di sini, artinya AI mati ATAU AI gagal (fallback), maka jalankan keyword autoreply biasa.
 
-    const rules = await dbQuery(
-        'SELECT * FROM autoreplies WHERE (device_id = ? OR device_id IS NULL) AND active = 1 ORDER BY priority DESC, id ASC',
-        [deviceId]
-    );
+        const rules = await dbQuery(
+            'SELECT * FROM autoreplies WHERE (device_id = ? OR device_id IS NULL) AND active = 1 ORDER BY priority DESC, id ASC',
+            [deviceId]
+        );
 
 
-    const text = incomingText.trim().toLowerCase();
+        const text = incomingText.trim().toLowerCase();
 
-    let keywordMatched = false;
-    for (const rule of rules) {
-        // Cek filter target reply (both, private, group)
-        const ruleTarget = rule.target_reply || 'both';
-        const matchChatType = (ruleTarget === 'both') ||
-            (ruleTarget === 'private' && !isGroup) ||
-            (ruleTarget === 'group' && isGroup);
-        if (!matchChatType) continue;
+        let keywordMatched = false;
+        for (const rule of rules) {
+            // Cek filter target reply (both, private, group)
+            const ruleTarget = rule.target_reply || 'both';
+            const matchChatType = (ruleTarget === 'both') ||
+                (ruleTarget === 'private' && !isGroup) ||
+                (ruleTarget === 'group' && isGroup);
+            if (!matchChatType) continue;
 
-        const trigger = rule.trigger_word.toLowerCase();
-        let matched = false;
+            const trigger = rule.trigger_word.toLowerCase();
+            let matched = false;
 
-        switch (rule.match_type) {
-            case 'exact': matched = text === trigger; break;
-            case 'startswith': matched = text.startsWith(trigger); break;
-            case 'contains':
-            default: matched = text.includes(trigger); break;
-        }
+            switch (rule.match_type) {
+                case 'exact': matched = text === trigger; break;
+                case 'startswith': matched = text.startsWith(trigger); break;
+                case 'contains':
+                default: matched = text.includes(trigger); break;
+            }
 
-        if (matched) {
-            keywordMatched = true;
-            const configuredDelay = (rule.delay !== undefined && rule.delay !== null) ? (rule.delay * 1000) : 1000;
-            // Simulasi mengetik singkat yang responsif (500ms - 1500ms)
-            const typingDuration = Math.min(1500, Math.max(500, configuredDelay));
+            if (matched) {
+                keywordMatched = true;
+                const configuredDelay = (rule.delay !== undefined && rule.delay !== null) ? (rule.delay * 1000) : 1000;
+                // Simulasi mengetik singkat yang responsif (500ms - 1500ms)
+                const typingDuration = Math.min(1500, Math.max(500, configuredDelay));
 
-            await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-            await new Promise(r => setTimeout(r, typingDuration));
+                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+                await new Promise(r => setTimeout(r, typingDuration));
 
-            try {
-                // Gunakan quoted msg agar thread konteks valid (terutama pada pesan pribadi / LID)
-                let sentMsg = null;
                 try {
-                    sentMsg = await sock.sendMessage(senderJid, { text: rule.reply_text }, { quoted: fullMsg });
-                } catch (quotedErr) {
-                    console.warn(`[Autoreply Quoted Error] ${quotedErr.message}, mencoba kirim pesan langsung...`);
-                    sentMsg = await sock.sendMessage(senderJid, { text: rule.reply_text });
+                    // Gunakan quoted msg agar thread konteks valid (terutama pada pesan pribadi / LID)
+                    let sentMsg = null;
+                    try {
+                        sentMsg = await sock.sendMessage(senderJid, { text: rule.reply_text }, { quoted: fullMsg });
+                    } catch (quotedErr) {
+                        console.warn(`[Autoreply Quoted Error] ${quotedErr.message}, mencoba kirim pesan langsung...`);
+                        sentMsg = await sock.sendMessage(senderJid, { text: rule.reply_text });
+                    }
+
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                    console.log(`[Autoreply] "${rule.trigger_word}" matched (${ruleTarget}) → kirim ke ${senderJid}`);
+
+                    // Simpan balasan manual autoreply ke histori DB
+                    const waMsgId = sentMsg?.key?.id || null;
+                    markBotSentMessage(waMsgId);
+                    await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', rule.reply_text, 'out', 'sent');
+                } catch (err) {
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                    console.error('[Autoreply Send Error]', err.message);
                 }
-
-                await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                console.log(`[Autoreply] "${rule.trigger_word}" matched (${ruleTarget}) → kirim ke ${senderJid}`);
-
-                // Simpan balasan manual autoreply ke histori DB
-                const waMsgId = sentMsg?.key?.id || null;
-                markBotSentMessage(waMsgId);
-                await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', rule.reply_text, 'out', 'sent');
-            } catch (err) {
-                await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                console.error('[Autoreply Send Error]', err.message);
+                break;
             }
-            break;
         }
-    }
-    if (keywordMatched) return;
+        if (keywordMatched) return;
 
-    const isTargetMatch = (targetReply === 'both') ||
-        (targetReply === 'private' && !isGroup) ||
-        (targetReply === 'group' && isGroup);
+        const isTargetMatch = (targetReply === 'both') ||
+            (targetReply === 'private' && !isGroup) ||
+            (targetReply === 'group' && isGroup);
 
-    const replyMode = aiConfig ? (aiConfig.reply_mode || 'manual') : 'manual';
-    const isAutoAi = (replyMode === 'auto' || replyMode === 'ai');
+        const replyMode = aiConfig ? (aiConfig.reply_mode || 'manual') : 'manual';
+        const isAutoAi = (replyMode === 'auto' || replyMode === 'ai');
 
-    const aiEnabled = isAiEnabled && isTargetMatch && isAutoAi;
-    const searchEnabled = aiConfig && aiConfig.search_enabled == 1;
+        const aiEnabled = isAiEnabled && isTargetMatch && isAutoAi;
+        const searchEnabled = aiConfig && aiConfig.search_enabled == 1;
 
-    // ── MODE AI: Gunakan Groq ─────────────────────────────────────────────────
-    if (aiEnabled) {
-        console.log(`[AI] Device ${deviceId} — Mode AI aktif, menghubungi Groq...`);
-        const aiStartTime = Date.now();
+        // ── MODE AI: Gunakan Groq ─────────────────────────────────────────────────
+        if (aiEnabled) {
+            console.log(`[AI] Device ${deviceId} — Mode AI aktif, menghubungi Groq...`);
+            const aiStartTime = Date.now();
 
-        // Tampilkan indikator mengetik selama AI berpikir
-        await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+            // Tampilkan indikator mengetik selama AI berpikir
+            await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
 
-        // Ambil 8 pesan terakhir untuk context history dari Baileys Store
-        const historyMsgs = session.store?.messages[senderJid]?.array?.slice(-8) || [];
+            // Ambil 8 pesan terakhir untuk context history dari Baileys Store
+            const historyMsgs = session.store?.messages[senderJid]?.array?.slice(-8) || [];
 
-        let chatContext = historyMsgs.map(msg => {
-            const isFromMe = msg.key.fromMe;
-            const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-            return {
-                role: isFromMe ? 'assistant' : 'user',
-                content: text
-            };
-        }).filter(c => c.content);
+            let chatContext = historyMsgs.map(msg => {
+                const isFromMe = msg.key.fromMe;
+                const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                return {
+                    role: isFromMe ? 'assistant' : 'user',
+                    content: text
+                };
+            }).filter(c => c.content);
 
-        // Pastikan pesan terakhir dalam konteks selalu pesan yang baru masuk (role: user)
-        // Groq membutuhkan prompt terakhir berasal dari user.
-        const lastContextMsg = chatContext.length > 0 ? chatContext[chatContext.length - 1] : null;
-        if (!lastContextMsg || lastContextMsg.content !== incomingText) {
-            chatContext.push({ role: 'user', content: incomingText });
-        }
+            // Pastikan pesan terakhir dalam konteks selalu pesan yang baru masuk (role: user)
+            // Groq membutuhkan prompt terakhir berasal dari user.
+            const lastContextMsg = chatContext.length > 0 ? chatContext[chatContext.length - 1] : null;
+            if (!lastContextMsg || lastContextMsg.content !== incomingText) {
+                chatContext.push({ role: 'user', content: incomingText });
+            }
 
-        let aiReply = null;
-        let sysPrompt = aiConfig.rules || 'Kamu adalah asisten WhatsApp yang ramah dan helpful. Balas dengan singkat dan jelas dalam Bahasa Indonesia.';
+            let aiReply = null;
+            let sysPrompt = aiConfig.rules || 'Kamu adalah asisten WhatsApp yang ramah dan helpful. Balas dengan singkat dan jelas dalam Bahasa Indonesia.';
 
-        // ── Aturan Format Balasan WhatsApp (Anti-Tabel & Ramah Layar HP) ───
-        const waFormatRules = `
+            // ── Aturan Format Balasan WhatsApp (Anti-Tabel & Ramah Layar HP) ───
+            const waFormatRules = `
 [ATURAN FORMAT BALASAN WHATSAPP (WAJIB DIIKUTI)]:
 1. Jawaban WAJIB rapi, bersih, dan nyaman dibaca di layar HP WhatsApp.
 2. DILARANG KERAS menggunakan format tabel Markdown (karakter '|'). WhatsApp TIDAK mendukung tabel Markdown!
@@ -1066,185 +1066,185 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
 6. Berikan jeda 1 baris kosong antar poin atau paragraf agar teks tidak menumpuk rapat.
 7. Jawab secara lengkap, jelas, dan tuntas sampai selesai.`;
 
-        sysPrompt = sysPrompt + "\n" + waFormatRules;
+            sysPrompt = sysPrompt + "\n" + waFormatRules;
 
-        // ── Inject Tanggal & Jam WIB ───────────────────────────────────────
-        const wibOffset = 7 * 60; // WIB = UTC+7
-        const nowUtc = new Date();
-        const nowWib = new Date(nowUtc.getTime() + wibOffset * 60 * 1000);
+            // ── Inject Tanggal & Jam WIB ───────────────────────────────────────
+            const wibOffset = 7 * 60; // WIB = UTC+7
+            const nowUtc = new Date();
+            const nowWib = new Date(nowUtc.getTime() + wibOffset * 60 * 1000);
 
-        const hariList = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        const bulanList = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            const hariList = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            const bulanList = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-        const hari = hariList[nowWib.getUTCDay()];
-        const tgl = nowWib.getUTCDate();
-        const bulan = bulanList[nowWib.getUTCMonth()];
-        const tahun = nowWib.getUTCFullYear();
-        const jam = String(nowWib.getUTCHours()).padStart(2, '0');
-        const menit = String(nowWib.getUTCMinutes()).padStart(2, '0');
-        const detik = String(nowWib.getUTCSeconds()).padStart(2, '0');
+            const hari = hariList[nowWib.getUTCDay()];
+            const tgl = nowWib.getUTCDate();
+            const bulan = bulanList[nowWib.getUTCMonth()];
+            const tahun = nowWib.getUTCFullYear();
+            const jam = String(nowWib.getUTCHours()).padStart(2, '0');
+            const menit = String(nowWib.getUTCMinutes()).padStart(2, '0');
+            const detik = String(nowWib.getUTCSeconds()).padStart(2, '0');
 
-        const waktuWib = `${hari}, ${tgl} ${bulan} ${tahun} pukul ${jam}:${menit}:${detik} WIB`;
-        sysPrompt = `[Waktu saat ini: ${waktuWib}]
+            const waktuWib = `${hari}, ${tgl} ${bulan} ${tahun} pukul ${jam}:${menit}:${detik} WIB`;
+            sysPrompt = `[Waktu saat ini: ${waktuWib}]
 
 ` + sysPrompt;
 
-        // ── Inject Knowledge Base / Data AI milik device ini jika ada ───────────
-        try {
-            const kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE device_id = ? ORDER BY id ASC', [deviceId]);
-            if (kbRows && kbRows.length > 0) {
-                const kbText = kbRows.map(k => `### ${k.title}:\n${k.content}`).join('\n\n');
-                sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ BISNIS TOKO]:\n` + kbText;
-            }
-        } catch (kbErr) {
-            console.warn('[AI] Gagal membaca data knowledge base device:', kbErr.message);
-        }
-
-        // ── Web Search Integration ─────────────────────────────────────────
-
-        if (searchEnabled && needsWebSearch(incomingText)) {
-            console.log(`[Search] Pertanyaan memerlukan info terkini, menjalankan web search...`);
+            // ── Inject Knowledge Base / Data AI milik device ini jika ada ───────────
             try {
-                const searchEngines = await dbQuery(
-                    'SELECT * FROM ai_search_engines WHERE is_active = 1 ORDER BY priority DESC, id ASC'
-                );
-                if (searchEngines.length > 0) {
-                    const { result: searchResult, provider } = await searchAutoSwitch(searchEngines, incomingText);
-                    if (searchResult) {
-                        console.log(`[Search] ✓ Hasil didapat dari ${provider}, inject ke prompt AI`);
-                        // Inject ke system prompt agar AI tahu info terkini
-                        sysPrompt = sysPrompt + `
+                const kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE device_id = ? ORDER BY id ASC', [deviceId]);
+                if (kbRows && kbRows.length > 0) {
+                    const kbText = kbRows.map(k => `### ${k.title}:\n${k.content}`).join('\n\n');
+                    sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ BISNIS TOKO]:\n` + kbText;
+                }
+            } catch (kbErr) {
+                console.warn('[AI] Gagal membaca data knowledge base device:', kbErr.message);
+            }
+
+            // ── Web Search Integration ─────────────────────────────────────────
+
+            if (searchEnabled && needsWebSearch(incomingText)) {
+                console.log(`[Search] Pertanyaan memerlukan info terkini, menjalankan web search...`);
+                try {
+                    const searchEngines = await dbQuery(
+                        'SELECT * FROM ai_search_engines WHERE is_active = 1 ORDER BY priority DESC, id ASC'
+                    );
+                    if (searchEngines.length > 0) {
+                        const { result: searchResult, provider } = await searchAutoSwitch(searchEngines, incomingText);
+                        if (searchResult) {
+                            console.log(`[Search] ✓ Hasil didapat dari ${provider}, inject ke prompt AI`);
+                            // Inject ke system prompt agar AI tahu info terkini
+                            sysPrompt = sysPrompt + `
 
 [INFORMASI TERKINI dari Web (${provider}):]
 ${searchResult}
 
 Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu prioritaskan informasi terkini ini daripada pengetahuan lamamu.`;
-                        // Increment pull_count di DB
-                        await dbQuery(
-                            'UPDATE ai_search_engines SET pull_count = pull_count + 1 WHERE provider = ? AND is_active = 1 LIMIT 1',
-                            [provider]
-                        );
+                            // Increment pull_count di DB
+                            await dbQuery(
+                                'UPDATE ai_search_engines SET pull_count = pull_count + 1 WHERE provider = ? AND is_active = 1 LIMIT 1',
+                                [provider]
+                            );
+                        } else {
+                            console.warn('[Search] Semua engine gagal mendapat hasil, lanjut tanpa search.');
+                        }
                     } else {
-                        console.warn('[Search] Semua engine gagal mendapat hasil, lanjut tanpa search.');
+                        console.log('[Search] Tidak ada search engine aktif, lanjut tanpa search.');
                     }
-                } else {
-                    console.log('[Search] Tidak ada search engine aktif, lanjut tanpa search.');
+                } catch (searchErr) {
+                    console.warn('[Search] Error saat web search:', searchErr.message);
                 }
-            } catch (searchErr) {
-                console.warn('[Search] Error saat web search:', searchErr.message);
             }
-        }
 
-        // ── Kumpulkan daftar server yang akan dicoba
-        let serversToTry = [];
-        if (aiConfig.ai_server_id && aiConfig.api_key) {
-            serversToTry.push({ api_key: aiConfig.api_key, label: aiConfig.ai_label });
-        } else {
-            serversToTry = await dbQuery('SELECT * FROM ai_servers WHERE is_active = 1 ORDER BY priority DESC, id ASC');
-        }
+            // ── Kumpulkan daftar server yang akan dicoba
+            let serversToTry = [];
+            if (aiConfig.ai_server_id && aiConfig.api_key) {
+                serversToTry.push({ api_key: aiConfig.api_key, label: aiConfig.ai_label });
+            } else {
+                serversToTry = await dbQuery('SELECT * FROM ai_servers WHERE is_active = 1 ORDER BY priority DESC, id ASC');
+            }
 
-        // ── Kumpulkan daftar model yang akan dicoba
-        let modelsToTry = [];
-        if (aiConfig.model && aiConfig.model !== 'auto') {
-            modelsToTry.push({ model_name: aiConfig.model });
-        } else {
-            modelsToTry = await dbQuery('SELECT * FROM ai_models WHERE is_active = 1 ORDER BY priority DESC, id ASC');
-            // Fallback jika tidak ada model di DB
-            if (modelsToTry.length === 0) modelsToTry.push({ model_name: 'llama3-8b-8192' });
-        }
+            // ── Kumpulkan daftar model yang akan dicoba
+            let modelsToTry = [];
+            if (aiConfig.model && aiConfig.model !== 'auto') {
+                modelsToTry.push({ model_name: aiConfig.model });
+            } else {
+                modelsToTry = await dbQuery('SELECT * FROM ai_models WHERE is_active = 1 ORDER BY priority DESC, id ASC');
+                // Fallback jika tidak ada model di DB
+                if (modelsToTry.length === 0) modelsToTry.push({ model_name: 'llama3-8b-8192' });
+            }
 
-        // ── Lakukan percobaan (Auto-Switch 2D)
-        console.log(`[DEBUG] aiConfig:`, aiConfig);
-        console.log(`[DEBUG] serversToTry length:`, serversToTry.length, serversToTry);
-        console.log(`[DEBUG] modelsToTry length:`, modelsToTry.length, modelsToTry);
+            // ── Lakukan percobaan (Auto-Switch 2D)
+            console.log(`[DEBUG] aiConfig:`, aiConfig);
+            console.log(`[DEBUG] serversToTry length:`, serversToTry.length, serversToTry);
+            console.log(`[DEBUG] modelsToTry length:`, modelsToTry.length, modelsToTry);
 
-        if (serversToTry.length === 0) {
-            console.warn(`[AI] Device ${deviceId} — Tidak ada API Key aktif (Server AI kosong)! Harap tambahkan API Key Groq di menu Server AI.`);
-        }
+            if (serversToTry.length === 0) {
+                console.warn(`[AI] Device ${deviceId} — Tidak ada API Key aktif (Server AI kosong)! Harap tambahkan API Key Groq di menu Server AI.`);
+            }
 
-        if (serversToTry.length > 0 && modelsToTry.length > 0) {
-            outerLoop: for (const srv of serversToTry) {
-                for (const mod of modelsToTry) {
-                    console.log(`[Groq] Trying server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
-                    aiReply = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext);
-                    if (aiReply) {
-                        console.log(`[Groq] ✓ Got reply from server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
-                        break outerLoop;
+            if (serversToTry.length > 0 && modelsToTry.length > 0) {
+                outerLoop: for (const srv of serversToTry) {
+                    for (const mod of modelsToTry) {
+                        console.log(`[Groq] Trying server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
+                        aiReply = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext);
+                        if (aiReply) {
+                            console.log(`[Groq] ✓ Got reply from server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
+                            break outerLoop;
+                        }
+                        console.warn(`[Groq] ✗ Failed on server: ${srv.label || 'Auto'} | Model: ${mod.model_name}, switching...`);
                     }
-                    console.warn(`[Groq] ✗ Failed on server: ${srv.label || 'Auto'} | Model: ${mod.model_name}, switching...`);
-                }
-            }
-        }
-
-        if (aiReply) {
-            // Bersihkan dan rapikan format teks untuk WhatsApp
-            aiReply = cleanWhatsAppFormatting(aiReply);
-
-            // Sisipkan panduan bantuan staf / Admin jika diaktifkan di template
-            const footerEnabled = aiConfig && (aiConfig.ai_footer_enabled !== undefined && aiConfig.ai_footer_enabled !== null)
-                ? (parseInt(aiConfig.ai_footer_enabled) === 1)
-                : true;
-
-            if (footerEnabled) {
-                const customFooter = aiConfig && aiConfig.ai_footer_text && aiConfig.ai_footer_text.trim()
-                    ? aiConfig.ai_footer_text.trim()
-                    : '────────────────────────\n💬 *Butuh bantuan staf / Admin?*\nKetik *Chat Admin* untuk berbicara langsung dengan tim kami.';
-
-                // Cek apakah footer sudah tertera di output aiReply agar tidak terduplikasi ganda
-                const cleanFooter = customFooter.replace(/[-_=*|#\s]/g, '').trim().toLowerCase();
-                const cleanAiReply = aiReply.replace(/[-_=*|#\s]/g, '').toLowerCase();
-                const isAlreadyInReply = (cleanFooter.length > 5 && cleanAiReply.includes(cleanFooter.substring(0, 25)))
-                    || aiReply.toLowerCase().includes('chat admin')
-                    || aiReply.toLowerCase().includes('butuh bantuan staf');
-
-                if (!isAlreadyInReply) {
-                    aiReply = aiReply + '\n\n' + customFooter;
                 }
             }
 
-            // ── SIMULASI MENGETIK RESPONSIF & ALAMI ───────────────────────────
-            // Karena status 'composing' sudah aktif selama Groq berpikir (~1-1.5 detik),
-            // kita hanya butuh jeda mengetik tambahan yang singkat (300ms - 800ms)
-            // agar total waktu respon bot tetap lincah (~1.8 - 2.5 detik) dan tidak membuat pelanggan menunggu lama.
-            const elapsedAiTime = Date.now() - aiStartTime;
-            const targetTotalDuration = Math.min(2200, Math.max(1500, Math.floor(aiReply.length * 3)));
-            const remainingDelay = Math.max(300, targetTotalDuration - elapsedAiTime);
-            const typingDuration = Math.min(800, remainingDelay);
+            if (aiReply) {
+                // Bersihkan dan rapikan format teks untuk WhatsApp
+                aiReply = cleanWhatsAppFormatting(aiReply);
 
-            console.log(`[AI TYPING] Mengetik ke ${senderJid} (${aiReply.length} karakter, jeda ${typingDuration}ms, total ~${elapsedAiTime + typingDuration}ms)...`);
-            await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-            await new Promise(r => setTimeout(r, typingDuration));
+                // Sisipkan panduan bantuan staf / Admin jika diaktifkan di template
+                const footerEnabled = aiConfig && (aiConfig.ai_footer_enabled !== undefined && aiConfig.ai_footer_enabled !== null)
+                    ? (parseInt(aiConfig.ai_footer_enabled) === 1)
+                    : true;
 
-            try {
-                let sentMsg = null;
+                if (footerEnabled) {
+                    const customFooter = aiConfig && aiConfig.ai_footer_text && aiConfig.ai_footer_text.trim()
+                        ? aiConfig.ai_footer_text.trim()
+                        : '────────────────────────\n💬 *Butuh bantuan staf / Admin?*\nKetik *Chat Admin* untuk berbicara langsung dengan tim kami.';
 
-                // Kirim teks standar WhatsApp yang 100% didukung dan stabil di semua perangkat (Android, iPhone, WA Web)
+                    // Cek apakah footer sudah tertera di output aiReply agar tidak terduplikasi ganda
+                    const cleanFooter = customFooter.replace(/[-_=*|#\s]/g, '').trim().toLowerCase();
+                    const cleanAiReply = aiReply.replace(/[-_=*|#\s]/g, '').toLowerCase();
+                    const isAlreadyInReply = (cleanFooter.length > 5 && cleanAiReply.includes(cleanFooter.substring(0, 25)))
+                        || aiReply.toLowerCase().includes('chat admin')
+                        || aiReply.toLowerCase().includes('butuh bantuan staf');
+
+                    if (!isAlreadyInReply) {
+                        aiReply = aiReply + '\n\n' + customFooter;
+                    }
+                }
+
+                // ── SIMULASI MENGETIK RESPONSIF & ALAMI ───────────────────────────
+                // Karena status 'composing' sudah aktif selama Groq berpikir (~1-1.5 detik),
+                // kita hanya butuh jeda mengetik tambahan yang singkat (300ms - 800ms)
+                // agar total waktu respon bot tetap lincah (~1.8 - 2.5 detik) dan tidak membuat pelanggan menunggu lama.
+                const elapsedAiTime = Date.now() - aiStartTime;
+                const targetTotalDuration = Math.min(2200, Math.max(1500, Math.floor(aiReply.length * 3)));
+                const remainingDelay = Math.max(300, targetTotalDuration - elapsedAiTime);
+                const typingDuration = Math.min(800, remainingDelay);
+
+                console.log(`[AI TYPING] Mengetik ke ${senderJid} (${aiReply.length} karakter, jeda ${typingDuration}ms, total ~${elapsedAiTime + typingDuration}ms)...`);
+                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+                await new Promise(r => setTimeout(r, typingDuration));
+
                 try {
-                    sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, { quoted: fullMsg });
-                } catch (quotedErr) {
-                    console.warn(`[AI Quoted Error] ${quotedErr.message}, mencoba kirim pesan langsung tanpa quote...`);
-                    sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
+                    let sentMsg = null;
+
+                    // Kirim teks standar WhatsApp yang 100% didukung dan stabil di semua perangkat (Android, iPhone, WA Web)
+                    try {
+                        sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, { quoted: fullMsg });
+                    } catch (quotedErr) {
+                        console.warn(`[AI Quoted Error] ${quotedErr.message}, mencoba kirim pesan langsung tanpa quote...`);
+                        sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
+                    }
+
+                    // Hentikan status mengetik SETELAH pesan sukses terkirim
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+
+                    const waMsgId = sentMsg?.key?.id || null;
+                    markBotSentMessage(waMsgId);
+                    console.log(`[AI] Balasan Groq teks berhasil terkirim ke ${senderJid}`);
+
+                    // Simpan balasan ke histori DB agar muncul di halaman "Lihat Chat"
+                    await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', aiReply, 'out', 'sent');
+                } catch (err) {
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                    console.error('[AI Send Error]', err.message);
                 }
-
-                // Hentikan status mengetik SETELAH pesan sukses terkirim
+                return; // Selesai, jangan lanjut ke autoreply biasa
+            } else {
                 await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-
-                const waMsgId = sentMsg?.key?.id || null;
-                markBotSentMessage(waMsgId);
-                console.log(`[AI] Balasan Groq teks berhasil terkirim ke ${senderJid}`);
-
-                // Simpan balasan ke histori DB agar muncul di halaman "Lihat Chat"
-                await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', aiReply, 'out', 'sent');
-            } catch (err) {
-                await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                console.error('[AI Send Error]', err.message);
+                console.warn('[AI] Semua server Groq gagal, fallback ke autoreply keyword...');
             }
-            return; // Selesai, jangan lanjut ke autoreply biasa
-        } else {
-            await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-            console.warn('[AI] Semua server Groq gagal, fallback ke autoreply keyword...');
         }
-    }
     } finally {
         // Lepas lock aktifitas autoreply untuk sender ini
         activeReplyLocks.delete(lockKey);
