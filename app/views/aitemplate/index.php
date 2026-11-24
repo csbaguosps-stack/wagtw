@@ -1065,7 +1065,7 @@ $(document).ready(function() {
                 $.ajax({
                     url: BASEURL + '/aitemplate/unmuteContact',
                     type: 'POST',
-                    data: { id: id, device_id: devId },
+                    data: { id: id, device_id: devId, phone: phone },
                     dataType: 'json',
                     success: function(res) {
                         if (res.status === 'success') {

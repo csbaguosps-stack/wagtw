@@ -599,19 +599,161 @@ async function unmuteContact(deviceId, phone, rawJid = null) {
 }
 
 /**
+ * Helper: Ambil target JID WhatsApp dari nomor telepon / LID
+ * Mendukung format standard (@s.whatsapp.net), Group (@g.us), dan LID baru WhatsApp (@lid)
+ */
+function getJidFromPhone(phone, session = null) {
+    if (!phone) return '';
+    const cleanPhone = phone.toString().trim();
+    if (cleanPhone.includes('@')) {
+        // Jika format salah diakhiri @s.whatsapp.net padahal digitnya adalah LID (>= 14 digit)
+        if (cleanPhone.endsWith('@s.whatsapp.net')) {
+            const rawDigits = normalizePhoneFromJid(cleanPhone);
+            if (rawDigits.length >= 14) return `${rawDigits}@lid`;
+        }
+        return cleanPhone;
+    }
+
+    // 1. Cek store Baileys untuk mencari JID asli yang tersimpan (misal JID LID dengan suffix :device)
+    if (session?.store) {
+        const rawChats = session.store.chats?.array || (Array.isArray(session.store.chats) ? session.store.chats : []);
+        const found = rawChats.find(c => {
+            const id = c?.id || c?.jid || '';
+            return normalizePhoneFromJid(id) === cleanPhone;
+        });
+        if (found?.id) return found.id;
+
+        if (session.store.messages) {
+            for (const jid of Object.keys(session.store.messages)) {
+                if (normalizePhoneFromJid(jid) === cleanPhone) {
+                    return jid;
+                }
+            }
+        }
+    }
+
+    // 2. Format Grup WhatsApp
+    if (cleanPhone.includes('-') || cleanPhone.endsWith('@g.us')) {
+        return cleanPhone.endsWith('@g.us') ? cleanPhone : `${cleanPhone}@g.us`;
+    }
+
+    // 3. Format LID (Linked Identity Device): nomor WA baru berdigit >= 14 (misal 130588497444897)
+    if (cleanPhone.length >= 14) {
+        return `${cleanPhone}@lid`;
+    }
+
+    // 4. Format nomor telepon biasa
+    return `${cleanPhone}@s.whatsapp.net`;
+}
+
+/**
+ * Auto-Followup: Saat kontak di-unmute (baik oleh admin di web, kata kunci #selesai, atau expired timer),
+ * periksa apakah ada pesan masuk terakhir dari kontak yang BELUM dibalas oleh admin / AI.
+ * Jika ada pesan tertunda, bot AI akan otomatis memproses dan membalasnya!
+ */
+async function triggerAutoReplyForUnmutedContact(deviceId, customerPhone, sessionId = null, reason = 'auto') {
+    if (!deviceId || !customerPhone) return { replied: false, reason: 'missing_params' };
+    const cleanPhone = normalizePhoneFromJid(customerPhone) || customerPhone.toString().trim();
+
+    try {
+        let targetSessionId = sessionId;
+        if (!targetSessionId) {
+            const devs = await dbQuery('SELECT session_id FROM devices WHERE id = ? LIMIT 1', [deviceId]);
+            if (devs.length) targetSessionId = devs[0].session_id;
+        }
+
+        if (!targetSessionId) {
+            console.warn(`[AI AUTO-FOLLOWUP] Device ${deviceId} tidak memiliki session_id.`);
+            return { replied: false, reason: 'no_session' };
+        }
+
+        const session = sessions[targetSessionId];
+        if (!session?.socket || session.status !== 'connected') {
+            console.warn(`[AI AUTO-FOLLOWUP] Sesi ${targetSessionId} belum connected. Lewati auto-reply.`);
+            return { replied: false, reason: 'session_not_connected' };
+        }
+
+        // Cari riwayat pesan terbaru antara kontak ini dan device
+        const recentMsgs = await dbQuery(`
+            SELECT id, from_phone, to_phone, direction, message, created_at 
+            FROM messages 
+            WHERE device_id = ? AND (from_phone = ? OR to_phone = ? OR from_phone LIKE ? OR to_phone LIKE ?)
+            ORDER BY id DESC LIMIT 10
+        `, [deviceId, cleanPhone, cleanPhone, `%${cleanPhone}%`, `%${cleanPhone}%`]);
+
+        if (!recentMsgs || !recentMsgs.length) {
+            console.log(`[AI AUTO-FOLLOWUP] Tidak ada riwayat pesan untuk kontak ${cleanPhone}.`);
+            return { replied: false, reason: 'no_messages' };
+        }
+
+        // Evaluasi pesan nyata terbaru (abaikan notifikasi sistem atau perintah kata kunci)
+        let pendingCustomerMsg = null;
+        for (const m of recentMsgs) {
+            const text = (m.message || '').trim();
+            if (!text) continue;
+            const lower = text.toLowerCase();
+
+            // Abaikan pesan konfirmasi sistem pengaktifan kembali
+            if (lower.includes('sesi percakapan dengan admin telah selesai') || 
+                lower.includes('bot ai telah diaktifkan kembali') ||
+                lower.includes('bot ai kami kini aktif kembali')) {
+                continue;
+            }
+
+            // Abaikan kata kunci perintah admin / bot
+            if (lower === '#selesai' || lower === 'selesai' || lower === 'akhiri percakapan' || lower === '#ai on' || lower === 'aktifkan ai') {
+                continue;
+            }
+
+            // Pesan nyata terbaru:
+            if (m.direction === 'in') {
+                pendingCustomerMsg = text;
+            } else {
+                // Pesan nyata terbaru berarah keluar (sudah dibalas manusia/admin)
+                pendingCustomerMsg = null;
+            }
+            break;
+        }
+
+        if (pendingCustomerMsg) {
+            console.log(`[AI AUTO-FOLLOWUP] Kontak ${cleanPhone} memiliki pesan yang belum dibalas (${reason}): "${pendingCustomerMsg.substring(0, 50)}...". Memicu balasan AI...`);
+
+            const senderJid = getJidFromPhone(cleanPhone, session);
+
+            // Beri jeda 800ms agar status & database stabil
+            await new Promise(r => setTimeout(r, 800));
+
+            // Panggil processAutoreply dengan skipMuteCheck = true
+            await processAutoreply(targetSessionId, senderJid, pendingCustomerMsg, null, true).catch(err => {
+                console.error(`[AI AUTO-FOLLOWUP ERR] Gagal membalas kontak ${cleanPhone}:`, err.message);
+            });
+
+            return { replied: true, text: pendingCustomerMsg };
+        } else {
+            console.log(`[AI AUTO-FOLLOWUP] Kontak ${cleanPhone} tidak memiliki pesan tertunda atau sudah dijawab. Tidak perlu auto-reply.`);
+            return { replied: false, reason: 'already_answered' };
+        }
+    } catch (err) {
+        console.error(`[AI AUTO-FOLLOWUP FATAL] Kontak ${cleanPhone}:`, err.message);
+        return { replied: false, error: err.message };
+    }
+}
+
+/**
  * Bersihkan data mute kontak yang masa berlakunya telah kadaluarsa dari database
  * FITUR AUTO-FOLLOWUP: Jika selama masa mute admin belum membalas pesan terakhir pelanggan,
  * maka saat AI aktif kembali, AI akan otomatis membalas pesan yang belum terjawab tersebut!
  */
 async function cleanupExpiredMutedContacts() {
     try {
+        const nowSql = formatDateToSql(new Date());
         const expiredRows = await dbQuery(`
             SELECT mc.id, mc.device_id, mc.phone, mc.reason, d.session_id, d.phone as device_phone
             FROM ai_muted_contacts mc
             JOIN devices d ON d.id = mc.device_id
-            WHERE (mc.muted_until IS NOT NULL AND mc.muted_until <= NOW()) 
+            WHERE (mc.muted_until IS NOT NULL AND mc.muted_until <= ?) 
                OR (mc.muted_until IS NULL AND mc.muted_date < CURRENT_DATE() AND mc.reason != 'manual')
-        `);
+        `, [nowSql]);
 
         if (!expiredRows || !expiredRows.length) return;
 
@@ -632,34 +774,8 @@ async function cleanupExpiredMutedContacts() {
             await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => { });
 
             const customerPhone = row.phone;
-            const myPhone = row.device_phone || session.phone;
-
-            // Cari pesan terakhir antara kontak ini dan device
-            const lastMsgs = await dbQuery(`
-                SELECT id, from_phone, to_phone, direction, message, created_at 
-                FROM messages 
-                WHERE device_id = ? AND (from_phone = ? OR to_phone = ? OR from_phone LIKE ? OR to_phone LIKE ?)
-                ORDER BY id DESC LIMIT 1
-            `, [row.device_id, customerPhone, customerPhone, `%${customerPhone}%`, `%${customerPhone}%`]);
-
-            if (lastMsgs && lastMsgs.length > 0) {
-                const lastMsg = lastMsgs[0];
-                // Jika pesan terakhir berarah MASUK (direction = 'in'), artinya belum dibalas oleh admin / AI!
-                if (lastMsg.direction === 'in' && lastMsg.message && lastMsg.message.trim()) {
-                    const pendingText = lastMsg.message.trim();
-                    console.log(`[AI AUTO-FOLLOWUP] Kontak ${customerPhone} belum dibalas admin/AI selama periode mute (${row.reason}). AI otomatis membalas: "${pendingText.substring(0, 50)}..."`);
-
-                    let senderJid = customerPhone.includes('@') 
-                        ? customerPhone 
-                        : (customerPhone.includes('-') || customerPhone.length > 15 ? `${customerPhone}@lid` : `${customerPhone}@s.whatsapp.net`);
-
-                    // Beri jeda 1 detik antar pesan
-                    await new Promise(r => setTimeout(r, 1000));
-                    await processAutoreply(sessionId, senderJid, pendingText, null).catch(err => {
-                        console.error(`[AI AUTO-FOLLOWUP ERR] Gagal membalas kontak ${customerPhone}:`, err.message);
-                    });
-                }
-            }
+            // Otomatis balas pesan tertunda pelanggan jika ada
+            await triggerAutoReplyForUnmutedContact(row.device_id, customerPhone, sessionId, `expired_${row.reason}`);
         }
     } catch (e) {
         console.warn('[AI MUTE CLEANUP] Error:', e.message);
@@ -952,8 +1068,14 @@ async function touchMutedContact(deviceId, phone) {
 }
 
 // ─── Autoreply Engine (dengan AI Groq) ──────────────────────────────────────
-async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
+async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = null, skipMuteCheck = false) {
     if (!incomingText || !sessionId || !senderJid) return;
+
+    // Normalisasi dan pastikan format JID akurat (termasuk deteksi LID v7)
+    const session = sessions[sessionId];
+    if (session) {
+        senderJid = getJidFromPhone(senderJid, session);
+    }
 
     // Cegah pemrosesan paralel/ganda untuk sesi dan nomor kontak yang sama
     const lockKey = `${sessionId}:${senderJid}`;
@@ -971,7 +1093,6 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
         const deviceId = devices[0].id;
         const userId = devices[0].user_id;
 
-        const session = sessions[sessionId];
         if (!session?.socket || session.status !== 'connected') return;
         const sock = session.socket;
 
@@ -1018,6 +1139,14 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                     await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
                     markBotSentMessage(sentMsg?.key?.id);
                 }
+
+                // Cek apakah ada teks pertanyaan tambahan dari pelanggan dalam pesan aktivasi yang sama
+                const extraQuestion = incomingText.replace(/#ai on|#ai aktif|!ai on|\/ai on|aktifkan ai/gi, '').trim();
+                if (extraQuestion.length >= 4) {
+                    console.log(`[AI UNMUTE] Pelanggan menyertakan pertanyaan saat reaktivasi: "${extraQuestion}". Memproses respon AI...`);
+                    await new Promise(r => setTimeout(r, 800));
+                    await processAutoreply(sessionId, senderJid, extraQuestion, null, true).catch(() => {});
+                }
                 return;
             }
 
@@ -1054,12 +1183,14 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
             }
 
             // 3. CEK STATUS MUTE (Pribadi maupun Grup)
-            const isMuted = await isContactMuted(deviceId, remotePhone, senderJid);
-            if (isMuted) {
-                console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
-                // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
-                await touchMutedContact(deviceId, remotePhone);
-                return; // Hentikan di sini, jangan membalas
+            if (!skipMuteCheck) {
+                const isMuted = await isContactMuted(deviceId, remotePhone, senderJid);
+                if (isMuted) {
+                    console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
+                    // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
+                    await touchMutedContact(deviceId, remotePhone);
+                    return; // Hentikan di sini, jangan membalas
+                }
             }
         }
 
@@ -1955,6 +2086,12 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                                         console.warn('[ADMIN END CONVERSATION] Gagal mengirim pesan notifikasi:', notifyErr.message);
                                     }
                                 }
+
+                                // Auto-followup: jika ada pesan pelanggan yang belum sempat dibalas sebelum sesi diakhiri,
+                                // AI akan otomatis memproses dan membalasnya sekarang
+                                triggerAutoReplyForUnmutedContact(devId, remotePhone, sessionId, 'admin_ended_chat').catch(err => {
+                                    console.error('[ADMIN END CONVERSATION AUTO-FOLLOWUP ERR]', err.message);
+                                });
                             } else {
                                 // Admin sedang chat manual biasa, maka mute kontak / perpanjang masa mute ("setelah tidak ada respon")
                                 console.log(`[ADMIN CHAT DETECTED] Human admin sedang berbicara langsung dengan ${remotePhone} (${senderJid}). Me-mute/memperpanjang mute Bot AI.`);
@@ -2450,6 +2587,36 @@ app.post('/api/send', authMiddleware, async (req, res) => {
     } catch (err) {
         console.error('[SEND ERROR]', err.message);
         res.status(500).json({ status: 'error', message: 'Gagal kirim: ' + err.message });
+    }
+});
+
+// ── POST /api/ai/unmute ────────────────────────────────────────────────────────
+// Endpoint dipanggil dari Web UI (Aitemplate) saat user klik "Aktifkan AI Sekarang"
+// atau saat aksi bulk unmute kontak dijalankan.
+app.post('/api/ai/unmute', authMiddleware, async (req, res) => {
+    try {
+        const { deviceId, phone } = req.body;
+        if (!deviceId || !phone) {
+            return res.status(400).json({ status: 'error', message: 'deviceId dan phone diperlukan.' });
+        }
+
+        const cleanPhone = normalizePhoneFromJid(phone) || String(phone).trim();
+        console.log(`[API AI UNMUTE] Permintaan aktivasi AI untuk kontak ${cleanPhone} pada Device ID ${deviceId}`);
+
+        // 1. Bersihkan record mute di database
+        await unmuteContact(deviceId, cleanPhone);
+
+        // 2. Trigger auto-followup jika ada pesan masuk terakhir yang belum dibalas
+        const result = await triggerAutoReplyForUnmutedContact(deviceId, cleanPhone, null, 'manual_web_unmute');
+
+        res.json({
+            status: 'success',
+            message: `Bot AI berhasil diaktifkan kembali untuk kontak ${cleanPhone}`,
+            autoReplied: result.replied || false
+        });
+    } catch (err) {
+        console.error('[API AI UNMUTE ERR]', err.message);
+        res.status(500).json({ status: 'error', message: err.message });
     }
 });
 

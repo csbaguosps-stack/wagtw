@@ -180,8 +180,17 @@ class Aitemplate extends Controller {
             return;
         }
 
+        $contact = $this->model('AiData_model')->getMutedContactById($id, $deviceId);
         $deleted = $this->model('AiData_model')->unmuteContactById($id, $deviceId);
         if ($deleted) {
+            $phone = !empty($_POST['phone']) ? trim($_POST['phone']) : ($contact['phone'] ?? null);
+            if ($phone) {
+                // Beritahu Node Engine untuk reaktivasi AI & auto-followup pesan tertunda pelanggan
+                $this->callNode('POST', '/api/ai/unmute', [
+                    'deviceId' => $deviceId,
+                    'phone'    => $phone
+                ]);
+            }
             echo json_encode(['status' => 'success', 'message' => 'Bot AI berhasil diaktifkan kembali untuk kontak ini!']);
         } else {
             echo json_encode(['status' => 'error', 'message' => 'Gagal mengaktifkan AI atau sesi kontak sudah tidak aktif']);
@@ -204,8 +213,15 @@ class Aitemplate extends Controller {
             return;
         }
 
+        $phones = $this->model('AiData_model')->getMutedPhonesByIds($ids, $deviceId);
         $deletedCount = $this->model('AiData_model')->deleteMutedBulk($ids, $deviceId);
         if ($deletedCount > 0) {
+            foreach ($phones as $phone) {
+                $this->callNode('POST', '/api/ai/unmute', [
+                    'deviceId' => $deviceId,
+                    'phone'    => $phone
+                ]);
+            }
             echo json_encode([
                 'status' => 'success',
                 'message' => "Berhasil mengaktifkan kembali Bot AI untuk {$deletedCount} kontak terpilih!",
@@ -233,7 +249,20 @@ class Aitemplate extends Controller {
             return;
         }
 
+        $allContacts = $this->model('AiData_model')->getMutedContactsByDevice($deviceId, $month, $year);
         $deletedCount = $this->model('AiData_model')->deleteAllMutedContacts($deviceId, $month, $year);
+        if ($deletedCount > 0 && !empty($allContacts)) {
+            $seen = [];
+            foreach ($allContacts as $c) {
+                if (!empty($c['phone']) && !isset($seen[$c['phone']])) {
+                    $seen[$c['phone']] = true;
+                    $this->callNode('POST', '/api/ai/unmute', [
+                        'deviceId' => $deviceId,
+                        'phone'    => $c['phone']
+                    ]);
+                }
+            }
+        }
         echo json_encode([
             'status' => 'success',
             'message' => "Berhasil mengaktifkan kembali Bot AI untuk seluruh kontak ({$deletedCount} kontak dibersihkan)!",

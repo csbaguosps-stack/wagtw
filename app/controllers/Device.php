@@ -20,47 +20,6 @@ class Device extends Controller {
         }
     }
 
-    // ─── Helper: cURL ke Node.js Engine ──────────────────────────────────
-    private function callNode($method, $path, $body = null)
-    {
-        $urls = [$this->nodeUrl . $path];
-        if (strpos($this->nodeUrl, '127.0.0.1:3001') === false) {
-            $urls[] = 'http://127.0.0.1:3001' . $path;
-        }
-
-        foreach ($urls as $url) {
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CUSTOMREQUEST  => $method,
-                CURLOPT_HTTPHEADER     => [
-                    'Content-Type: application/json',
-                    'X-Api-Token: ' . $this->apiToken,
-                ],
-                CURLOPT_TIMEOUT        => 15,
-                CURLOPT_CONNECTTIMEOUT => 8,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => false,
-            ]);
-
-            if ($body !== null) {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-            }
-
-            $response = curl_exec($ch);
-            $err      = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($response !== false && !$err && $httpCode < 500) {
-                return json_decode($response, true);
-            }
-        }
-
-        return null;
-    }
-
     // ─── index() ─────────────────────────────────────────────────────────
     public function index()
     {

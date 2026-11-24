@@ -260,6 +260,34 @@ class AiData_model {
         return $this->db->resultSet();
     }
 
+    public function getMutedContactById($id, $deviceId)
+    {
+        $this->db->query("SELECT * FROM ai_muted_contacts WHERE id = :id AND device_id = :device_id LIMIT 1");
+        $this->db->bind('id', $id);
+        $this->db->bind('device_id', $deviceId);
+        return $this->db->single();
+    }
+
+    public function getMutedPhonesByIds($ids, $deviceId)
+    {
+        if (empty($ids) || !is_array($ids)) return [];
+        $cleanIds = array_map('intval', array_filter($ids));
+        if (empty($cleanIds)) return [];
+
+        $idList = implode(',', $cleanIds);
+        $this->db->query("SELECT DISTINCT phone FROM ai_muted_contacts WHERE id IN ($idList) AND device_id = :device_id");
+        $this->db->bind('device_id', $deviceId);
+        $rows = $this->db->resultSet();
+
+        $phones = [];
+        if (!empty($rows)) {
+            foreach ($rows as $r) {
+                if (!empty($r['phone'])) $phones[] = $r['phone'];
+            }
+        }
+        return $phones;
+    }
+
     public function unmuteContactById($id, $deviceId)
     {
         $this->db->query("SELECT phone FROM ai_muted_contacts WHERE id = :id AND device_id = :device_id LIMIT 1");
