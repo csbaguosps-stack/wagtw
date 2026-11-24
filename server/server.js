@@ -574,16 +574,61 @@ async function unmuteContact(deviceId, phone, rawJid = null) {
 
 /**
  * Bersihkan data mute kontak yang masa berlakunya telah kadaluarsa dari database
+ * FITUR AUTO-FOLLOWUP: Jika selama masa mute admin belum membalas pesan terakhir pelanggan,
+ * maka saat AI aktif kembali, AI akan otomatis membalas pesan yang belum terjawab tersebut!
  */
 async function cleanupExpiredMutedContacts() {
     try {
-        const res = await dbQuery(`
-            DELETE FROM ai_muted_contacts 
-            WHERE (muted_until IS NOT NULL AND muted_until <= NOW()) 
-               OR (muted_until IS NULL AND muted_date < CURRENT_DATE() AND reason != 'manual')
+        const expiredRows = await dbQuery(`
+            SELECT mc.id, mc.device_id, mc.phone, mc.reason, d.session_id, d.phone as device_phone
+            FROM ai_muted_contacts mc
+            JOIN devices d ON d.id = mc.device_id
+            WHERE (mc.muted_until IS NOT NULL AND mc.muted_until <= NOW()) 
+               OR (mc.muted_until IS NULL AND mc.muted_date < CURRENT_DATE() AND mc.reason != 'manual')
         `);
-        if (res && res.affectedRows > 0) {
-            console.log(`[AI MUTE CLEANUP] Berhasil membersihkan ${res.affectedRows} riwayat mute yang telah berakhir. Bot AI aktif kembali.`);
+
+        if (!expiredRows || !expiredRows.length) return;
+
+        console.log(`[AI REACTIVATE] Ditemukan ${expiredRows.length} kontak yang masa mute-nya telah berakhir. Mengaktifkan AI kembali...`);
+
+        for (const row of expiredRows) {
+            // Hapus dari ai_muted_contacts
+            await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => { });
+
+            // Cek apakah device dan sesi WhatsApp sedang aktif/terkoneksi
+            const sessionId = row.session_id;
+            const session = sessions[sessionId];
+            if (!session?.socket || session.status !== 'connected') continue;
+
+            const customerPhone = row.phone;
+            const myPhone = row.device_phone || session.phone;
+
+            // Cari pesan terakhir antara kontak ini dan device
+            const lastMsgs = await dbQuery(`
+                SELECT id, from_phone, to_phone, direction, message, created_at 
+                FROM messages 
+                WHERE (from_phone = ? AND to_phone = ?) OR (from_phone = ? AND to_phone = ?)
+                ORDER BY id DESC LIMIT 1
+            `, [customerPhone, myPhone, myPhone, customerPhone]);
+
+            if (lastMsgs && lastMsgs.length > 0) {
+                const lastMsg = lastMsgs[0];
+                // Jika pesan terakhir berarah MASUK (direction = 'in'), artinya belum dibalas oleh admin!
+                if (lastMsg.direction === 'in' && lastMsg.message && lastMsg.message.trim()) {
+                    const pendingText = lastMsg.message.trim();
+                    console.log(`[AI AUTO-FOLLOWUP] Kontak ${customerPhone} belum dibalas admin selama timeout. AI otomatis menjawab: "${pendingText.substring(0, 50)}..."`);
+
+                    let senderJid = customerPhone.includes('@') 
+                        ? customerPhone 
+                        : (customerPhone.includes('-') || customerPhone.length > 15 ? `${customerPhone}@lid` : `${customerPhone}@s.whatsapp.net`);
+
+                    // Beri jeda 1 detik antar pesan
+                    await new Promise(r => setTimeout(r, 1000));
+                    await processAutoreply(sessionId, senderJid, pendingText, null).catch(err => {
+                        console.error(`[AI AUTO-FOLLOWUP ERR] Gagal membalas kontak ${customerPhone}:`, err.message);
+                    });
+                }
+            }
         }
     } catch (e) {
         console.warn('[AI MUTE CLEANUP] Error:', e.message);
@@ -592,6 +637,8 @@ async function cleanupExpiredMutedContacts() {
 
 /**
  * Deteksi pemicu Chat Admin dari teks pesan masuk
+ * HANYA aktif jika pelanggan benar-benar meminta bantuan admin/manusia secara eksplisit.
+ * Pertanyaan biasa seperti "Halo admin, alamat di mana?" atau "mau tanya admin..." TIDAK akan memicu mute.
  */
 function isChatAdminTrigger(text) {
     if (!text || typeof text !== 'string') return false;
@@ -604,16 +651,17 @@ function isChatAdminTrigger(text) {
 
     // 2. Frasa spesifik chat admin
     if (normalized.includes('chat admin') || normalized.includes('chatt admin') || normalized.includes('hubungi admin')) return true;
-    if (normalized.includes('bantuan admin') || normalized.includes('kontak admin') || normalized.includes('tanya admin')) return true;
-    if (normalized.includes('bicara dengan admin') || normalized.includes('bicara admin') || normalized.includes('ngomong sama admin')) return true;
+    if (normalized.includes('bantuan admin') || normalized.includes('kontak admin')) return true;
+    if (normalized.includes('bicara dengan admin') || normalized.includes('bicara admin') || normalized.includes('ngomong sama admin') || normalized.includes('bicara sama admin')) return true;
+    if (normalized.includes('sambungkan ke admin') || normalized.includes('sambungkan admin') || normalized.includes('alih kan ke admin') || normalized.includes('panggil admin')) return true;
 
-    // 3. Sapaan singkat ke admin (contoh: "halo admin", "halo admin dong", "pagi admin", "admin dong")
+    // 3. Sapaan singkat HANYA kepada admin tanpa pertanyaan lanjutan (contoh: persis "halo admin", "halo cs", "pagi admin")
     if (/^(halo|hai|hi|hei|pagi|siang|sore|malam)?\s*(admin|cs|operator)\s*(dong|ya|tolong|pls|please)?$/i.test(normalized)) {
         return true;
     }
 
-    // 4. Pola kombinasi tindakan (contoh: "bisa tolong hubungi admin?", "mau chat staf admin")
-    if (/\b(chat|chatt|hubungi|kontak|bicara|berbicara|ngobrol|ngomong|tanya|panggil|sambungkan)\b.*\b(admin|staf|staff|cs|operator|customer service|manusia|human)\b/i.test(normalized)) {
+    // 4. Pola kombinasi tindakan meminta terhubung dengan staf/manusia (BUKAN sekadar bertanya "mau tanya admin...", "tanya staff...")
+    if (/\b(minta|tolong|mau|bisa|mohon)\s+(chat|chatt|hubungi|kontak|bicara|ngobrol|ngomong|sambungkan|dialihkan|alih)\b.*\b(admin|staf|staff|cs|operator|customer service|manusia|human)\b/i.test(normalized)) {
         return true;
     }
 
@@ -1332,7 +1380,11 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
 
                     // Kirim teks standar WhatsApp yang 100% didukung dan stabil di semua perangkat (Android, iPhone, WA Web)
                     try {
-                        sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, { quoted: fullMsg });
+                        if (fullMsg && fullMsg.key?.id) {
+                            sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, { quoted: fullMsg });
+                        } else {
+                            sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
+                        }
                     } catch (quotedErr) {
                         console.warn(`[AI Quoted Error] ${quotedErr.message}, mencoba kirim pesan langsung tanpa quote...`);
                         sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
@@ -2710,8 +2762,8 @@ async function runHourlyAutoReconnect() {
 // Jalankan watchdog & auto-reconnect setiap 1 jam
 setInterval(runHourlyAutoReconnect, AUTO_RECONNECT_INTERVAL_MS);
 
-// Bersihkan data mute expired setiap 1 menit
-setInterval(cleanupExpiredMutedContacts, 60 * 1000);
+// Bersihkan data mute expired & otomatis balas pesan yang tertunda setiap 30 detik
+setInterval(cleanupExpiredMutedContacts, 30 * 1000);
 
 
 // ─── Auto-Restore Sessions on Startup ────────────────────────────────────────
