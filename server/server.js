@@ -618,13 +618,18 @@ async function cleanupExpiredMutedContacts() {
         console.log(`[AI REACTIVATE] Ditemukan ${expiredRows.length} kontak yang masa mute-nya telah berakhir. Mengaktifkan AI kembali...`);
 
         for (const row of expiredRows) {
-            // Hapus dari ai_muted_contacts
-            await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => { });
-
             // Cek apakah device dan sesi WhatsApp sedang aktif/terkoneksi
             const sessionId = row.session_id;
             const session = sessions[sessionId];
-            if (!session?.socket || session.status !== 'connected') continue;
+            if (!session?.socket || session.status !== 'connected') {
+                // Sesi WhatsApp sedang offline/reconnecting, tunda 30 detik agar dicoba kembali saat koneksi pulih
+                const retrySoon = formatDateToSql(new Date(Date.now() + 30 * 1000));
+                await dbQuery('UPDATE ai_muted_contacts SET muted_until = ? WHERE id = ?', [retrySoon, row.id]).catch(() => { });
+                continue;
+            }
+
+            // Hapus dari ai_muted_contacts setelah dipastikan sesi WhatsApp siap
+            await dbQuery('DELETE FROM ai_muted_contacts WHERE id = ?', [row.id]).catch(() => { });
 
             const customerPhone = row.phone;
             const myPhone = row.device_phone || session.phone;
@@ -760,10 +765,22 @@ function isEndConversationKeyword(text, keywordSetting) {
 function calculateMutedUntil(durationSetting, reason = null) {
     const now = new Date();
 
-    // Jika AI mati / API error, tetapi durasi diatur ke 'manual' atau 'next_day',
-    // berikan waktu retry default (1 menit) agar pesan pelanggan otomatis di-retry saat AI pulih
+    // 1. Jika AI limit (Rate Limit / Quota / 429): waktu mute tepat 1 menit agar membalas kembali setelah 1 menit
+    if (reason === 'ai_rate_limit') {
+        return new Date(now.getTime() + 1 * 60 * 1000); // 1 Menit
+    }
+
+    // 2. Jika AI mati / API error, berikan waktu retry default (1 menit) jika durasi diatur ke manual/next_day
     if ((reason === 'ai_server_down' || reason === 'ai_error') && (durationSetting === 'manual' || durationSetting === 'next_day')) {
         return new Date(now.getTime() + 1 * 60 * 1000); // 1 Menit retry default
+    }
+
+    // 3. Jika gagal kirim pesan WhatsApp (ai_send_failed):
+    // Masuk ke AI mute dan coba kembali membalas setelah DURASI YANG DITENTUKAN oleh setting device.
+    if (reason === 'ai_send_failed') {
+        if (durationSetting === 'manual') {
+            return new Date(now.getTime() + 5 * 60 * 1000); // Fallback 5 menit jika mode manual
+        }
     }
 
     switch (durationSetting) {
@@ -918,7 +935,7 @@ async function touchMutedContact(deviceId, phone) {
         );
         const durationSetting = aiSets.length && aiSets[0].ai_reactivate_duration ? aiSets[0].ai_reactivate_duration : 'next_day';
 
-        if (durationSetting.includes('_hour') || durationSetting.includes('_minute') || durationSetting.startsWith('custom_') || rows[0].reason === 'ai_server_down' || rows[0].reason === 'ai_error') {
+        if (durationSetting.includes('_hour') || durationSetting.includes('_minute') || durationSetting.startsWith('custom_') || rows[0].reason === 'ai_server_down' || rows[0].reason === 'ai_error' || rows[0].reason === 'ai_rate_limit' || rows[0].reason === 'ai_send_failed') {
             const newUntil = calculateMutedUntil(durationSetting, rows[0].reason);
             const newUntilSql = formatDateToSql(newUntil);
             await dbQuery(
@@ -1361,6 +1378,8 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 console.warn(`[AI] Device ${deviceId} — Tidak ada API Key aktif (Server AI kosong)! Harap tambahkan API Key Groq di menu Server AI.`);
             }
 
+            let isRateLimited = false;
+
             if (serversToTry.length > 0 && modelsToTry.length > 0) {
                 outerLoop: for (const srv of serversToTry) {
                     for (const mod of modelsToTry) {
@@ -1377,6 +1396,11 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                         const errMsg = groqRes?.error || 'Gagal menghubungi server Groq';
                         const maskedKey = srv.api_key ? (srv.api_key.substring(0, 10) + '...' + srv.api_key.slice(-6)) : 'unknown';
                         console.warn(`[Groq] ✗ Failed on server: ${srv.label || 'Auto'} | Model: ${mod.model_name} [${errStatus}: ${errMsg}], switching...`);
+
+                        // Deteksi Rate Limit / Quota Exceeded (429 atau pesan limit)
+                        if (errStatus === '429' || (typeof errMsg === 'string' && /rate[_\s-]?limit|too many requests|tpm|rpm|quota|tokens per minute|requests per minute/i.test(errMsg))) {
+                            isRateLimited = true;
+                        }
 
                         try {
                             await dbQuery(
@@ -1456,19 +1480,32 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                     await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', aiReply, 'out', 'sent');
                 } catch (err) {
                     await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                    console.error('[AI Send Error]', err.message);
+                    console.error('[AI Send Error] Gagal mengirim pesan ke WhatsApp:', err.message);
+                    console.warn(`[AI SEND FAILED] Kontak ${remotePhone} dimasukkan ke AI mute karena gagal kirim, akan dicoba kembali setelah durasi yang ditentukan.`);
+                    await muteContact(deviceId, remotePhone, 'ai_send_failed');
                 }
                 return; // Selesai, jangan lanjut ke autoreply biasa
             } else {
                 await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                console.warn(`[AI FAILED] Semua server AI gagal/mati untuk device ${deviceId}. Me-mute kontak ${remotePhone} secara otomatis ke status Bot Mute agar ditangani staf / di-retry otomatis...`);
-                await muteContact(deviceId, remotePhone, 'ai_server_down');
+                if (isRateLimited) {
+                    console.warn(`[AI LIMIT] AI mencapai limit (Rate Limit / Quota) untuk device ${deviceId}. Me-mute kontak ${remotePhone} selama 1 menit dan akan otomatis membalas kembali setelah 1 menit...`);
+                    await muteContact(deviceId, remotePhone, 'ai_rate_limit');
+                } else {
+                    console.warn(`[AI FAILED] Semua server AI gagal/mati untuk device ${deviceId}. Me-mute kontak ${remotePhone} secara otomatis ke status Bot Mute agar ditangani staf / di-retry otomatis...`);
+                    await muteContact(deviceId, remotePhone, 'ai_server_down');
+                }
                 return;
             }
         } catch (aiErr) {
             await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-            console.error(`[AI ERROR] Terjadi kesalahan saat memproses AI untuk device ${deviceId}:`, aiErr.message);
-            await muteContact(deviceId, remotePhone, 'ai_server_down');
+            const isLimit = typeof aiErr.message === 'string' && /rate[_\s-]?limit|too many requests|tpm|rpm|quota|429/i.test(aiErr.message);
+            if (isLimit) {
+                console.warn(`[AI LIMIT ERROR] AI limit terdeteksi untuk device ${deviceId}:`, aiErr.message);
+                await muteContact(deviceId, remotePhone, 'ai_rate_limit');
+            } else {
+                console.error(`[AI ERROR] Terjadi kesalahan saat memproses AI untuk device ${deviceId}:`, aiErr.message);
+                await muteContact(deviceId, remotePhone, 'ai_server_down');
+            }
             return;
         }
     }
@@ -2825,8 +2862,8 @@ async function runHourlyAutoReconnect() {
 // Jalankan watchdog & auto-reconnect setiap 1 jam
 setInterval(runHourlyAutoReconnect, AUTO_RECONNECT_INTERVAL_MS);
 
-// Bersihkan data mute expired & otomatis balas pesan yang tertunda setiap 30 detik
-setInterval(cleanupExpiredMutedContacts, 30 * 1000);
+// Bersihkan data mute expired & otomatis balas pesan yang tertunda setiap 15 detik
+setInterval(cleanupExpiredMutedContacts, 15 * 1000);
 
 
 // ─── Auto-Restore Sessions on Startup ────────────────────────────────────────

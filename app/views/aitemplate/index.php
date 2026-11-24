@@ -554,6 +554,14 @@ $years = range(intval(date('Y')) - 2, intval(date('Y')) + 3);
                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                                         💬 Minta Chat Admin
                                     </span>
+                                <?php elseif ($mc['reason'] === 'ai_rate_limit'): ?>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                                        ⏱️ AI Limit (Auto-Retry 1 Mnt)
+                                    </span>
+                                <?php elseif ($mc['reason'] === 'ai_send_failed'): ?>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                        ❌ Gagal Kirim (Auto-Retry)
+                                    </span>
                                 <?php elseif ($mc['reason'] === 'ai_server_down' || $mc['reason'] === 'ai_error'): ?>
                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                                         ⚠️ AI Mati / Error (Auto-Retry)
@@ -734,6 +742,10 @@ $(document).ready(function() {
             let reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">👤 Admin Menjawab</span>';
             if (mc.reason === 'chat_admin') {
                 reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">💬 Minta Chat Admin</span>';
+            } else if (mc.reason === 'ai_rate_limit') {
+                reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">⏱️ AI Limit (Auto-Retry 1 Mnt)</span>';
+            } else if (mc.reason === 'ai_send_failed') {
+                reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">❌ Gagal Kirim (Auto-Retry)</span>';
             } else if (mc.reason === 'ai_server_down' || mc.reason === 'ai_error') {
                 reasonBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">⚠️ AI Mati / Error (Auto-Retry)</span>';
             }
