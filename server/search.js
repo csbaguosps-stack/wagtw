@@ -30,6 +30,7 @@ async function searchDuckDuckGo(query) {
         };
 
         const req = https.request(options, (res) => {
+            res.setEncoding('utf8');
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
@@ -98,6 +99,7 @@ async function searchBing(query, apiKey) {
             };
 
             const req = https.request(options, (res) => {
+                res.setEncoding('utf8');
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
@@ -134,6 +136,7 @@ async function searchBing(query, apiKey) {
             };
 
             const req = https.request(options, (res) => {
+                res.setEncoding('utf8');
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
@@ -189,6 +192,7 @@ async function searchGoogle(query, apiKey) {
             };
 
             const req = https.request(options, (res) => {
+                res.setEncoding('utf8');
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
@@ -226,6 +230,7 @@ async function searchGoogle(query, apiKey) {
             };
 
             const req = https.request(options, (res) => {
+                res.setEncoding('utf8');
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {

@@ -388,11 +388,47 @@ async function dispatchWebhook(sessionId, senderJid, incomingText, fullMsg) {
 // ─── WhatsApp Text Formatter & Helper Functions ─────────────────────────────
 
 /**
+ * Mengonversi nomor telepon di dalam teks menjadi link WhatsApp (https://wa.me/...) yang bisa langsung diklik
+ * - Membersihkan karakter unicode rusak (diamond question mark \uFFFD)
+ * - Menangani nomor telepon Indonesia (+62 / 62 / 08...)
+ * - Mengabaikan nomor yang sudah berupa link / URL (wa.me, http://, https://)
+ */
+function makePhoneNumbersClickable(text) {
+    if (!text || typeof text !== 'string') return '';
+
+    // 1. Bersihkan karakter rusak seperti replacement character \uFFFD, zero-width spaces, dll
+    let clean = text.replace(/[\uFFFD\u200B-\u200D\uFEFF]/g, '');
+
+    // 2. Normalisasi berbagai jenis tanda hubung unicode (en-dash, em-dash, non-breaking hyphen)
+    clean = clean.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-');
+
+    // 3. Regex mendeteksi nomor telepon Indonesia (+62 / 62 / 08...) tanpa mengubah URL yang sudah ada
+    return clean.replace(/(?:(https?:\/\/[^\s]+|wa\.me\/[^\s]+)|(\+?62[\s\-]?8[0-9\s\-]{7,18}[0-9]|08[0-9\s\-]{8,16}[0-9]))/gi, (match, url, phone) => {
+        if (url) {
+            return url;
+        }
+        if (phone) {
+            let digits = phone.replace(/[^0-9]/g, '');
+            if (digits.startsWith('08')) {
+                digits = '62' + digits.substring(1);
+            } else if (digits.startsWith('8')) {
+                digits = '62' + digits;
+            }
+            if (digits.length >= 10 && digits.length <= 15 && digits.startsWith('628')) {
+                return `https://wa.me/${digits}`;
+            }
+        }
+        return match;
+    });
+}
+
+/**
  * Merapikan format balasan AI agar ramah WhatsApp:
  * - Mengonversi tabel Markdown menjadi daftar poin terstruktur
  * - Mengubah tag HTML (<br>, <b>, dll) menjadi format WhatsApp
  * - Menghilangkan double asterisks (**text** -> *text*)
  * - Merapikan spasi kosong ganda
+ * - Mengonversi nomor telepon menjadi tautan wa.me yang bisa langsung diklik
  */
 function cleanWhatsAppFormatting(input) {
     if (!input || typeof input !== 'string') return '';
@@ -448,6 +484,9 @@ function cleanWhatsAppFormatting(input) {
     // 5. Bersihkan baris baru berlebih
     result = result.replace(/[ \t]+\n/g, '\n');
     result = result.replace(/\n{3,}/g, '\n\n');
+
+    // 6. Format nomor telepon menjadi tautan wa.me yang bisa langsung diklik oleh pengguna
+    result = makePhoneNumbersClickable(result);
 
     return result.trim();
 }
@@ -1112,7 +1151,8 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
 4. Gunakan format daftar poin (bullet '•' atau nomor '1.', '2.') untuk menguraikan penjelasan atau langkah.
 5. Gunakan cetak tebal WhatsApp (*kata*) untuk menonjolkan judul poin atau istilah penting.
 6. Berikan jeda 1 baris kosong antar poin atau paragraf agar teks tidak menumpuk rapat.
-7. Jawab secara lengkap, jelas, dan tuntas sampai selesai.`;
+7. Jawab secara lengkap, jelas, dan tuntas sampai selesai.
+8. FORMAT NOMOR TELEPON/WHATSAPP: Jika memberikan nomor telepon atau kontak WhatsApp, WAJIB tuliskan dalam format tautan/link yang BISA LANGSUNG DIKLIK oleh pelanggan di WhatsApp, yaitu https://wa.me/628xxx (contoh: 'Telp/WA: https://wa.me/6285129868954'). Dilarang memecah angka telepon dengan spasi atau karakter aneh agar link tetap utuh dan bisa langsung diklik.`;
 
             sysPrompt = sysPrompt + "\n" + waFormatRules;
 
