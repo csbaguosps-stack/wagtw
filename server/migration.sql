@@ -369,6 +369,23 @@ ALTER TABLE `ai_muted_contacts`
     ADD COLUMN IF NOT EXISTS `muted_until` DATETIME DEFAULT NULL COMMENT 'Batas waktu kontak di-mute' AFTER `muted_date`;
 
 -- ──────────────────────────────────────────────────────────────
+-- 15. TABEL AI SERVER LOGS (Riwayat Error API Key Mati / Gagal)
+-- ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `ai_server_logs` (
+    `id`             INT(11)      NOT NULL AUTO_INCREMENT,
+    `server_id`      INT(11)      NULL,
+    `label`          VARCHAR(100) NOT NULL,
+    `api_key_masked` VARCHAR(100) NOT NULL,
+    `model`          VARCHAR(100) NOT NULL DEFAULT 'llama3-8b-8192',
+    `status_code`    VARCHAR(50)  NOT NULL DEFAULT 'ERROR',
+    `error_message`  TEXT         NOT NULL,
+    `created_at`     DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_server_id` (`server_id`),
+    KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ──────────────────────────────────────────────────────────────
 -- DEFAULT SEED DATA
 -- ──────────────────────────────────────────────────────────────
 -- Akun Super Admin Bawaan

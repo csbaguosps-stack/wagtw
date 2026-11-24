@@ -1166,12 +1166,28 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 outerLoop: for (const srv of serversToTry) {
                     for (const mod of modelsToTry) {
                         console.log(`[Groq] Trying server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
-                        aiReply = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext);
-                        if (aiReply) {
+                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext);
+                        if (groqRes && groqRes.ok && groqRes.text) {
+                            aiReply = groqRes.text;
                             console.log(`[Groq] ✓ Got reply from server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
                             break outerLoop;
                         }
-                        console.warn(`[Groq] ✗ Failed on server: ${srv.label || 'Auto'} | Model: ${mod.model_name}, switching...`);
+
+                        // Catat kegagalan / API mati ke database (ai_server_logs)
+                        const errStatus = String(groqRes?.statusCode || 'ERR');
+                        const errMsg = groqRes?.error || 'Gagal menghubungi server Groq';
+                        const maskedKey = srv.api_key ? (srv.api_key.substring(0, 10) + '...' + srv.api_key.slice(-6)) : 'unknown';
+                        console.warn(`[Groq] ✗ Failed on server: ${srv.label || 'Auto'} | Model: ${mod.model_name} [${errStatus}: ${errMsg}], switching...`);
+
+                        try {
+                            await dbQuery(
+                                `INSERT INTO ai_server_logs (server_id, label, api_key_masked, model, status_code, error_message, created_at)
+                                 VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+                                [srv.id || null, srv.label || 'Groq Key', maskedKey, mod.model_name, errStatus, errMsg]
+                            );
+                        } catch (logErr) {
+                            console.warn('[AI Log Error]', logErr.message);
+                        }
                     }
                 }
             }

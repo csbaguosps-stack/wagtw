@@ -258,4 +258,49 @@ class AiServer_model {
         $this->db->execute();
         return $this->db->rowCount();
     }
+
+    // ─── AI Server Error Logs (Riwayat API Mati) ──────────────────────────────
+
+    public function getLogs($limit = 100)
+    {
+        $this->db->query("SELECT * FROM ai_server_logs ORDER BY created_at DESC, id DESC LIMIT :limit");
+        $this->db->bind('limit', (int)$limit, PDO::PARAM_INT);
+        return $this->db->resultSet();
+    }
+
+    public function getLogCount()
+    {
+        $this->db->query("SELECT COUNT(*) as cnt FROM ai_server_logs");
+        $res = $this->db->single();
+        return $res ? (int)$res['cnt'] : 0;
+    }
+
+    public function addLog($serverId, $label, $apiKeyMasked, $model, $statusCode, $errorMessage)
+    {
+        $this->db->query("INSERT INTO ai_server_logs (server_id, label, api_key_masked, model, status_code, error_message, created_at) 
+                          VALUES (:server_id, :label, :api_key_masked, :model, :status_code, :error_message, NOW())");
+        $this->db->bind('server_id', $serverId);
+        $this->db->bind('label', $label);
+        $this->db->bind('api_key_masked', $apiKeyMasked);
+        $this->db->bind('model', $model);
+        $this->db->bind('status_code', $statusCode);
+        $this->db->bind('error_message', $errorMessage);
+        $this->db->execute();
+        return $this->db->rowCount();
+    }
+
+    public function deleteLog($id)
+    {
+        $this->db->query("DELETE FROM ai_server_logs WHERE id = :id");
+        $this->db->bind('id', $id);
+        $this->db->execute();
+        return $this->db->rowCount();
+    }
+
+    public function deleteAllLogs()
+    {
+        $this->db->query("DELETE FROM ai_server_logs");
+        $this->db->execute();
+        return $this->db->rowCount();
+    }
 }

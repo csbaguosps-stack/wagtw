@@ -30,6 +30,9 @@ class Aiserver extends Controller {
         $data['search_engines'] = $this->model('AiServer_model')->getAllSearchEnginesByUser($this->getVisibleUserIdsString());
         // Monitoring: semua device yang AI-nya aktif beserta info user yang mengaktifkan
         $data['ai_activations'] = $this->model('AiData_model')->getActiveAiByAllUsers();
+        // Riwayat error API Key mati / gagal
+        $data['api_logs']      = $this->model('AiServer_model')->getLogs(100);
+        $data['api_log_count'] = count($data['api_logs']);
 
         if (isset($_GET['ajax']) && $_GET['ajax'] == 'true') {
             $this->view('aiserver/index', $data);
@@ -385,8 +388,10 @@ class Aiserver extends Controller {
     public function testApi()
     {
         header('Content-Type: application/json');
-        $apiKey = trim($_POST['api_key'] ?? '');
-        $model  = $_POST['model'] ?? 'llama3-8b-8192';
+        $apiKey   = trim($_POST['api_key'] ?? '');
+        $model    = $_POST['model'] ?? 'llama3-8b-8192';
+        $serverId = intval($_POST['server_id'] ?? 0) ?: null;
+        $label    = trim($_POST['label'] ?? 'Manual Test Key');
 
         if (empty($apiKey)) {
             echo json_encode(['status' => 'error', 'message' => 'API Key kosong!']);
@@ -415,8 +420,13 @@ class Aiserver extends Controller {
         $err      = curl_error($ch);
         curl_close($ch);
 
+        $maskedKey = (strlen($apiKey) > 16) ? substr($apiKey, 0, 10) . '...' . substr($apiKey, -6) : '***';
+
         if ($err || !$response) {
-            echo json_encode(['status' => 'error', 'message' => 'Tidak bisa terhubung ke Groq: ' . $err]);
+            $errMsg = 'Tidak bisa terhubung ke Groq: ' . ($err ?: 'No response');
+            $this->model('AiServer_model')->addLog($serverId, $label, $maskedKey, $model, 'CONN_ERR', $errMsg);
+            $newCount = $this->model('AiServer_model')->getLogCount();
+            echo json_encode(['status' => 'error', 'message' => $errMsg, 'logged' => true, 'log_count' => $newCount]);
             return;
         }
 
@@ -425,9 +435,42 @@ class Aiserver extends Controller {
             $reply = $result['choices'][0]['message']['content'] ?? 'OK';
             echo json_encode(['status' => 'success', 'message' => 'API Key valid! Respon: "' . $reply . '"']);
         } else {
-            $errMsg = $result['error']['message'] ?? 'Unknown error (HTTP ' . $httpCode . ')';
-            echo json_encode(['status' => 'error', 'message' => 'Groq Error: ' . $errMsg]);
+            $errMsg = $result['error']['message'] ?? ('HTTP ' . $httpCode . ' Error');
+            $statusCode = $httpCode ? (string)$httpCode : 'ERR';
+            $this->model('AiServer_model')->addLog($serverId, $label, $maskedKey, $model, $statusCode, $errMsg);
+            $newCount = $this->model('AiServer_model')->getLogCount();
+            echo json_encode(['status' => 'error', 'message' => 'Groq Error (' . $statusCode . '): ' . $errMsg, 'logged' => true, 'log_count' => $newCount]);
         }
+    }
+
+    // ─── deleteLog() — Hapus 1 baris riwayat API mati ─────────────────────────
+    public function deleteLog()
+    {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+
+        $id = intval($_POST['id'] ?? 0);
+        if (!$id) {
+            echo json_encode(['status' => 'error', 'message' => 'ID riwayat tidak valid!']);
+            return;
+        }
+
+        if ($this->model('AiServer_model')->deleteLog($id) >= 0) {
+            $count = $this->model('AiServer_model')->getLogCount();
+            echo json_encode(['status' => 'success', 'message' => 'Riwayat berhasil dihapus.', 'count' => $count]);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Gagal menghapus riwayat.']);
+        }
+    }
+
+    // ─── deleteAllLogs() — Hapus seluruh riwayat API mati ─────────────────────
+    public function deleteAllLogs()
+    {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+
+        $this->model('AiServer_model')->deleteAllLogs();
+        echo json_encode(['status' => 'success', 'message' => 'Seluruh riwayat API mati berhasil dibersihkan!']);
     }
 
     // ─── deleteActivation() — Hapus / Nonaktifkan AI device oleh Super Admin ───

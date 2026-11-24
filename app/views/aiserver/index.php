@@ -37,6 +37,12 @@
             ?>
             <span id="monitoring-active-badge" class="<?= $activeCount > 0 ? '' : 'hidden ' ?>bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"><?= $activeCount ?></span>
         </button>
+        <button onclick="switchTab('history')" id="tab-btn-history" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all text-gray-500 hover:bg-gray-50">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Riwayat API Mati
+            <?php $logCount = $data['api_log_count'] ?? 0; ?>
+            <span id="history-badge" class="<?= $logCount > 0 ? '' : 'hidden ' ?>bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"><?= $logCount ?></span>
+        </button>
     </div>
 
     <!-- TAB 1: API KEYS -->
@@ -92,6 +98,7 @@
                     <?php endif; ?>
                     
                     <div class="flex items-center gap-1.5">
+                        <button onclick="testApiKey(<?= $srv['id'] ?>, '<?= htmlspecialchars(addslashes($srv['api_key'])) ?>', '<?= htmlspecialchars(addslashes($srv['label'])) ?>')" class="p-2 text-amber-600 hover:bg-amber-100 bg-amber-50 rounded-xl transition shadow-xs" title="Test Status API Key"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></button>
                         <button onclick="toggleActive(<?= $srv['id'] ?>)" class="p-2 <?= $srv['is_active'] ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-gray-400 bg-gray-50 hover:bg-gray-100' ?> rounded-xl transition shadow-xs" title="<?= $srv['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?>"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></button>
                         <button onclick="openEditModal(<?= $srv['id'] ?>)" class="p-2 text-blue-600 hover:bg-blue-100 bg-blue-50 rounded-xl transition shadow-xs" title="Edit"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>
                         <button onclick="deleteServer(<?= $srv['id'] ?>)" class="p-2 text-red-600 hover:bg-red-100 bg-red-50 rounded-xl transition shadow-xs" title="Hapus"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
@@ -365,6 +372,101 @@
             </table>
         </div>
         <?php endif; ?>
+    </div>
+
+    <!-- TAB 5: RIWAYAT API MATI / ERROR -->
+    <div id="tab-content-history" class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hidden">
+        <div class="p-6 flex items-start justify-between border-b border-gray-50 flex-wrap gap-4">
+            <div>
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    Riwayat API Key Mati / Gagal
+                    <span id="history-total-badge" class="bg-red-100 text-red-700 text-xs font-bold px-2.5 py-0.5 rounded-full"><?= count($data['api_logs'] ?? []) ?></span>
+                </h3>
+                <p class="text-sm text-gray-400 mt-1">Mencatat riwayat ketika API Key Groq gagal (401 Invalid, 429 Quota/Rate Limit, Timeout) saat bot membalas atau saat pengetesan.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="deleteAllApiLogs()" id="btn-delete-all-logs" class="<?= empty($data['api_logs']) ? 'hidden ' : '' ?>bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Hapus Semua Riwayat
+                </button>
+            </div>
+        </div>
+
+        <!-- Toolbar Pencarian Riwayat -->
+        <div class="px-6 py-3 bg-gray-50/50 border-b border-gray-50 flex flex-wrap items-center justify-between gap-3 <?= empty($data['api_logs']) ? 'hidden' : '' ?>" id="history-toolbar">
+            <div class="relative w-full sm:w-72">
+                <input type="text" id="history-search-input" oninput="filterHistoryList()" placeholder="Cari label / key / error..." class="w-full pl-9 pr-4 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-300 focus:border-red-400 outline-none transition">
+                <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-gray-400">
+                <span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                <span>Menampilkan hingga 100 riwayat error terbaru</span>
+            </div>
+        </div>
+
+        <!-- Tabel Riwayat -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm" id="history-table">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-left">
+                        <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Waktu</th>
+                        <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">API Key</th>
+                        <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Model</th>
+                        <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                        <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Pesan Error / Alasan</th>
+                        <th class="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50" id="history-table-body">
+                    <?php if (empty($data['api_logs'])): ?>
+                    <tr id="history-empty-row">
+                        <td colspan="6" class="p-10 text-center text-gray-400">
+                            <div class="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <p class="font-medium text-gray-600">Tidak ada riwayat API mati</p>
+                            <p class="text-xs text-gray-400 mt-0.5">Semua API Key terpantau berjalan normal tanpa kendala.</p>
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach ($data['api_logs'] as $log): ?>
+                    <tr class="hover:bg-gray-50/60 transition-colors history-row-item" id="history-row-<?= $log['id'] ?>" data-search="<?= strtolower(htmlspecialchars($log['label'] . ' ' . $log['api_key_masked'] . ' ' . $log['error_message'] . ' ' . $log['status_code'])) ?>">
+                        <td class="px-5 py-4 whitespace-nowrap text-xs text-gray-500 font-mono">
+                            <?= date('d M Y, H:i:s', strtotime($log['created_at'])) ?> WIB
+                        </td>
+                        <td class="px-5 py-4 whitespace-nowrap">
+                            <div class="font-bold text-gray-800 text-xs sm:text-sm"><?= htmlspecialchars($log['label']) ?></div>
+                            <div class="text-[11px] font-mono text-gray-400"><?= htmlspecialchars($log['api_key_masked']) ?></div>
+                        </td>
+                        <td class="px-5 py-4 whitespace-nowrap text-xs font-mono text-gray-600">
+                            <?= htmlspecialchars($log['model']) ?>
+                        </td>
+                        <td class="px-5 py-4 whitespace-nowrap">
+                            <?php
+                                $sc = $log['status_code'];
+                                $badgeColor = 'bg-red-100 text-red-700';
+                                if ($sc === '429') $badgeColor = 'bg-amber-100 text-amber-700';
+                                elseif ($sc === 'TIMEOUT') $badgeColor = 'bg-orange-100 text-orange-700';
+                            ?>
+                            <span class="inline-flex items-center gap-1 <?= $badgeColor ?> text-xs font-bold px-2.5 py-0.5 rounded-full">
+                                <?= htmlspecialchars($sc) ?>
+                            </span>
+                        </td>
+                        <td class="px-5 py-4 text-xs text-gray-700 max-w-xs break-words">
+                            <?= htmlspecialchars($log['error_message']) ?>
+                        </td>
+                        <td class="px-5 py-4 text-center whitespace-nowrap">
+                            <button onclick="deleteApiLog(<?= $log['id'] ?>)" class="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition" title="Hapus riwayat ini">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -761,13 +863,38 @@ function toggleActive(id) {
 // Inisialisasi Pagination API Keys saat halaman selesai dimuat
 renderServerPagination();
 
-function testApiKey(id, apiKey) {
-    Swal.fire({ title: '⚡ Testing API...', text: 'Mengirim request ke Groq...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    const fd = new FormData(); fd.append('api_key', apiKey); fd.append('model', 'llama3-8b-8192');
+function testApiKey(id, apiKey, label) {
+    Swal.fire({ title: '⚡ Testing API Key...', text: 'Mengirim request ping ke Groq...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    const fd = new FormData();
+    fd.append('api_key', apiKey);
+    fd.append('model', 'llama3-8b-8192');
+    if (id) fd.append('server_id', id);
+    if (label) fd.append('label', label);
+
     fetch(BASEURL + '/aiserver/testApi', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(res => {
-            Swal.fire({ icon: res.status === 'success' ? 'success' : 'error', title: res.status === 'success' ? '✅ API Valid!' : '❌ Gagal!', text: res.message });
+            if (res.status === 'success') {
+                Swal.fire({ icon: 'success', title: '✅ API Valid & Aktif!', text: res.message });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: '❌ API Gagal / Mati!',
+                    html: `<div class="text-left text-sm"><p class="text-red-600 font-semibold mb-2">${res.message}</p><p class="text-xs text-gray-500">Error ini telah otomatis dicatat ke tab <strong>Riwayat API Mati</strong>.</p></div>`
+                });
+                if (res.log_count !== undefined) {
+                    const b = document.getElementById('history-badge');
+                    if (b) {
+                        b.textContent = res.log_count;
+                        b.classList.remove('hidden');
+                    }
+                    const tb = document.getElementById('history-total-badge');
+                    if (tb) tb.textContent = res.log_count;
+                }
+            }
+        })
+        .catch(e => {
+            Swal.fire({ icon: 'error', title: 'Error', text: e.message });
         });
 }
 
@@ -1018,7 +1145,7 @@ function deleteActivation(deviceId, deviceName) {
 }
 
 function switchTab(tab) {
-    const tabs = ['server', 'model', 'search', 'monitoring'];
+    const tabs = ['server', 'model', 'search', 'monitoring', 'history'];
     
     tabs.forEach(t => {
         const btn = document.getElementById('tab-btn-' + t);
@@ -1034,5 +1161,135 @@ function switchTab(tab) {
     if (tab === 'server' && typeof renderServerPagination === 'function') {
         renderServerPagination();
     }
+}
+
+// ─── Riwayat API Mati Actions ────────────────────────────────────────────────
+function deleteApiLog(id) {
+    Swal.fire({
+        title: 'Hapus Riwayat Ini?',
+        text: 'Item log error API ini akan dihapus permanen.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Ya, Hapus!',
+        cancelButtonText: 'Batal'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        
+        const fd = new FormData();
+        fd.append('id', id);
+        fetch(BASEURL + '/aiserver/deleteLog', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    const row = document.getElementById('history-row-' + id);
+                    if (row) {
+                        row.classList.add('opacity-0', 'transition-opacity');
+                        setTimeout(() => {
+                            row.remove();
+                            const rem = res.count !== undefined ? res.count : document.querySelectorAll('.history-row-item').length;
+                            const b = document.getElementById('history-badge');
+                            if (b) {
+                                b.textContent = rem;
+                                if (rem <= 0) b.classList.add('hidden');
+                            }
+                            const tb = document.getElementById('history-total-badge');
+                            if (tb) tb.textContent = rem;
+
+                            if (rem <= 0) {
+                                const tbody = document.getElementById('history-table-body');
+                                if (tbody) {
+                                    tbody.innerHTML = `
+                                    <tr id="history-empty-row">
+                                        <td colspan="6" class="p-10 text-center text-gray-400">
+                                            <div class="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            </div>
+                                            <p class="font-medium text-gray-600">Tidak ada riwayat API mati</p>
+                                            <p class="text-xs text-gray-400 mt-0.5">Semua API Key terpantau berjalan normal tanpa kendala.</p>
+                                        </td>
+                                    </tr>`;
+                                }
+                                const btnAll = document.getElementById('btn-delete-all-logs');
+                                if (btnAll) btnAll.classList.add('hidden');
+                                const tbToolbar = document.getElementById('history-toolbar');
+                                if (tbToolbar) tbToolbar.classList.add('hidden');
+                            }
+                        }, 250);
+                    }
+                    Swal.fire({ icon: 'success', title: 'Terhapus!', text: res.message, timer: 1500, showConfirmButton: false });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+                }
+            })
+            .catch(err => {
+                Swal.fire({ icon: 'error', title: 'Error!', text: 'Terjadi kesalahan pada server.' });
+            });
+    });
+}
+
+function deleteAllApiLogs() {
+    Swal.fire({
+        title: 'Hapus Semua Riwayat?',
+        text: 'Seluruh riwayat API mati akan dibersihkan secara permanen.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Ya, Bersihkan Semua!',
+        cancelButtonText: 'Batal'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        fetch(BASEURL + '/aiserver/deleteAllLogs', { method: 'POST' })
+            .then(r => r.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    const b = document.getElementById('history-badge');
+                    if (b) { b.textContent = '0'; b.classList.add('hidden'); }
+                    const tb = document.getElementById('history-total-badge');
+                    if (tb) tb.textContent = '0';
+
+                    const tbody = document.getElementById('history-table-body');
+                    if (tbody) {
+                        tbody.innerHTML = `
+                        <tr id="history-empty-row">
+                            <td colspan="6" class="p-10 text-center text-gray-400">
+                                <div class="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                </div>
+                                <p class="font-medium text-gray-600">Tidak ada riwayat API mati</p>
+                                <p class="text-xs text-gray-400 mt-0.5">Semua API Key terpantau berjalan normal tanpa kendala.</p>
+                            </td>
+                        </tr>`;
+                    }
+                    const btnAll = document.getElementById('btn-delete-all-logs');
+                    if (btnAll) btnAll.classList.add('hidden');
+                    const tbToolbar = document.getElementById('history-toolbar');
+                    if (tbToolbar) tbToolbar.classList.add('hidden');
+
+                    Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1500, showConfirmButton: false });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+                }
+            })
+            .catch(err => {
+                Swal.fire({ icon: 'error', title: 'Error!', text: 'Terjadi kesalahan pada server.' });
+            });
+    });
+}
+
+function filterHistoryList() {
+    const q = (document.getElementById('history-search-input')?.value || '').toLowerCase().trim();
+    const rows = document.querySelectorAll('.history-row-item');
+    rows.forEach(r => {
+        const searchData = r.getAttribute('data-search') || '';
+        if (!q || searchData.includes(q)) {
+            r.style.display = '';
+        } else {
+            r.style.display = 'none';
+        }
+    });
 }
 </script>

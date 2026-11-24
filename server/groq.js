@@ -46,28 +46,28 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory) {
                 try {
                     const json = JSON.parse(data);
                     if (res.statusCode === 200 && json.choices?.[0]?.message?.content) {
-                        resolve(json.choices[0].message.content.trim());
+                        resolve({ ok: true, text: json.choices[0].message.content.trim(), statusCode: 200 });
                     } else {
                         const errMsg = json.error?.message || `HTTP ${res.statusCode}`;
-                        console.warn(`[Groq] Error: ${errMsg}`);
-                        resolve(null);
+                        console.warn(`[Groq] Error (${res.statusCode}): ${errMsg}`);
+                        resolve({ ok: false, error: errMsg, statusCode: res.statusCode || 500 });
                     }
                 } catch (e) {
                     console.warn('[Groq] Parse error:', e.message);
-                    resolve(null);
+                    resolve({ ok: false, error: 'Parse response error: ' + e.message, statusCode: res.statusCode || 500 });
                 }
             });
         });
 
         req.on('error', (e) => {
             console.warn('[Groq] Request error:', e.message);
-            resolve(null);
+            resolve({ ok: false, error: e.message, statusCode: 'NET_ERR' });
         });
 
         req.setTimeout(15000, () => {
             req.destroy();
             console.warn('[Groq] Request timeout');
-            resolve(null);
+            resolve({ ok: false, error: 'Request timeout (15s)', statusCode: 'TIMEOUT' });
         });
 
         req.write(payload);
@@ -87,10 +87,10 @@ async function callGroqAutoSwitch(servers, sysPrompt, chatHistory) {
 
     for (const server of servers) {
         console.log(`[Groq] Trying server: ${server.label || server.id} | Model: ${server.model}`);
-        const reply = await callGroq(server.api_key, server.model, sysPrompt, chatHistory);
-        if (reply) {
+        const res = await callGroq(server.api_key, server.model, sysPrompt, chatHistory);
+        if (res && res.ok && res.text) {
             console.log(`[Groq] ✓ Got reply from: ${server.label || server.id}`);
-            return reply;
+            return res.text;
         }
         console.warn(`[Groq] ✗ Failed on server: ${server.label || server.id}, switching...`);
     }
