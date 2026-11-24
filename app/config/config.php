@@ -77,11 +77,11 @@ if ($isLocal) {
     define('DB_PASS', '');
     define('DB_NAME', 'wagtw');
 } else {
-    // Production / Hosting Settings (Diambil dari file server/.env)
+    // Production / Hosting Settings (Diambil dari file server/.env dengan fallback default)
     define('DB_HOST', $envConfig['DB_HOST'] ?? 'localhost');
-    define('DB_USER', $envConfig['DB_USER'] ?? '');
-    define('DB_PASS', $envConfig['DB_PASS'] ?? '');
-    define('DB_NAME', $envConfig['DB_NAME'] ?? '');
+    define('DB_USER', $envConfig['DB_USER'] ?? 'winseeop_wagtw');
+    define('DB_PASS', $envConfig['DB_PASS'] ?? 'winseeop_wagtw');
+    define('DB_NAME', $envConfig['DB_NAME'] ?? 'winseeop_wagtw');
 }
 
 // ─── Node.js Baileys Engine API Settings ───────────────────────────────────────
