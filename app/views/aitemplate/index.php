@@ -220,9 +220,41 @@ $years = range(intval(date('Y')) - 2, intval(date('Y')) + 3);
 
                 <div class="space-y-3">
                     <label class="block text-xs font-semibold text-gray-700 mb-2">Pilih Periode AI Aktif Kembali:</label>
-                    <?php $curDur = $tpl['ai_reactivate_duration'] ?? 'next_day'; ?>
+                    <?php 
+                        $curDur = $tpl['ai_reactivate_duration'] ?? 'next_day'; 
+                        $isCustom = (strpos($curDur, 'custom_') === 0);
+                        $customVal = 10;
+                        $customUnit = 'm';
+                        if ($isCustom) {
+                            $raw = str_replace('custom_', '', $curDur);
+                            if (substr($raw, -1) === 'm') {
+                                $customVal = intval(substr($raw, 0, -1)) ?: 10;
+                                $customUnit = 'm';
+                            } elseif (substr($raw, -1) === 'h') {
+                                $customVal = intval(substr($raw, 0, -1)) ?: 1;
+                                $customUnit = 'h';
+                            } else {
+                                $customVal = intval($raw) ?: 10;
+                                $customUnit = 'm';
+                            }
+                        }
+                    ?>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5" id="durationRadioGroup">
                         
+                        <label class="dur-card relative flex items-center p-3 rounded-xl border cursor-pointer transition-all <?= ($curDur === '5_minutes') ? 'border-emerald-500 bg-emerald-50/40 text-emerald-900 font-bold ring-1 ring-emerald-500' : 'border-gray-200 hover:border-gray-300 text-gray-700' ?>">
+                            <input type="radio" name="ai_reactivate_duration" value="5_minutes" <?= ($curDur === '5_minutes') ? 'checked' : '' ?> class="sr-only">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-2.5 h-2.5 rounded-full <?= ($curDur === '5_minutes') ? 'bg-emerald-500' : 'bg-gray-300' ?> radio-dot"></span>
+                                <div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs block font-bold">5 Menit</span>
+                                        <span class="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded">Cepat</span>
+                                    </div>
+                                    <span class="text-[10px] text-gray-400 block font-normal">Setelah tidak ada respon</span>
+                                </div>
+                            </div>
+                        </label>
+
                         <label class="dur-card relative flex items-center p-3 rounded-xl border cursor-pointer transition-all <?= ($curDur === '1_hour') ? 'border-emerald-500 bg-emerald-50/40 text-emerald-900 font-bold ring-1 ring-emerald-500' : 'border-gray-200 hover:border-gray-300 text-gray-700' ?>">
                             <input type="radio" name="ai_reactivate_duration" value="1_hour" <?= ($curDur === '1_hour') ? 'checked' : '' ?> class="sr-only">
                             <div class="flex items-center gap-2.5">
@@ -288,6 +320,36 @@ $years = range(intval(date('Y')) - 2, intval(date('Y')) + 3);
                                 </div>
                             </div>
                         </label>
+
+                        <label class="dur-card relative flex items-center p-3 rounded-xl border cursor-pointer transition-all <?= $isCustom ? 'border-emerald-500 bg-emerald-50/40 text-emerald-900 font-bold ring-1 ring-emerald-500' : 'border-gray-200 hover:border-gray-300 text-gray-700' ?>" id="durCardCustom">
+                            <input type="radio" name="ai_reactivate_duration" id="radioCustomDur" value="<?= $isCustom ? htmlspecialchars($curDur) : 'custom_10m' ?>" <?= $isCustom ? 'checked' : '' ?> class="sr-only">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-2.5 h-2.5 rounded-full <?= $isCustom ? 'bg-emerald-500' : 'bg-gray-300' ?> radio-dot"></span>
+                                <div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs block font-bold">Custom Manual</span>
+                                        <span class="px-1.5 py-0.2 bg-blue-100 text-blue-800 text-[9px] font-bold rounded">Fleksibel</span>
+                                    </div>
+                                    <span class="text-[10px] text-gray-400 block font-normal">Atur menit / jam sendiri</span>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Input Box Khusus Custom Duration -->
+                    <div id="customDurationBox" class="<?= $isCustom ? '' : 'hidden ' ?>mt-3 p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200 flex flex-wrap items-center gap-3">
+                        <div class="text-xs font-semibold text-emerald-900 flex-shrink-0 flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Tentukan Durasi Custom:
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="inputCustomDurVal" min="1" max="999" value="<?= $customVal ?>" class="w-20 px-3 py-1.5 text-xs font-bold text-gray-800 bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 text-center shadow-xs">
+                            <select id="selectCustomDurUnit" class="px-3 py-1.5 text-xs font-bold text-gray-800 bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-xs cursor-pointer">
+                                <option value="m" <?= $customUnit === 'm' ? 'selected' : '' ?>>Menit</option>
+                                <option value="h" <?= $customUnit === 'h' ? 'selected' : '' ?>>Jam</option>
+                            </select>
+                        </div>
+                        <div class="text-[11px] text-emerald-700 italic">Dihitung mundur dari pesan terakhir chat admin.</div>
                     </div>
                 </div>
             </div>
@@ -552,8 +614,28 @@ $(document).ready(function() {
         }
     });
 
+    // ── Update Custom Duration Radio Value ──
+    function updateCustomDurationValue() {
+        let val = parseInt($('#inputCustomDurVal').val()) || 10;
+        if (val < 1) val = 1;
+        let unit = $('#selectCustomDurUnit').val() || 'm';
+        let combined = `custom_${val}${unit}`;
+        $('#radioCustomDur').val(combined);
+    }
+    $('#inputCustomDurVal, #selectCustomDurUnit').on('input change', function() {
+        updateCustomDurationValue();
+    });
+
     // ── Radio card styling listener ──
     $('input[name="ai_reactivate_duration"]').on('change', function() {
+        const isCustomChecked = $('#radioCustomDur').is(':checked');
+        if (isCustomChecked) {
+            updateCustomDurationValue();
+            $('#customDurationBox').removeClass('hidden');
+        } else {
+            $('#customDurationBox').addClass('hidden');
+        }
+
         $('.dur-card').each(function() {
             const radio = $(this).find('input[type="radio"]');
             const dot = $(this).find('.radio-dot');
@@ -591,7 +673,18 @@ $(document).ready(function() {
                     $('#aiHandoffText').val(t.ai_handoff_text);
 
                     // Duration
-                    $(`input[name="ai_reactivate_duration"][value="${t.ai_reactivate_duration}"]`).prop('checked', true).trigger('change');
+                    if (t.ai_reactivate_duration && t.ai_reactivate_duration.startsWith('custom_')) {
+                        const raw = t.ai_reactivate_duration.replace('custom_', '');
+                        let unit = raw.endsWith('h') ? 'h' : 'm';
+                        let num = parseInt(raw) || 10;
+                        $('#inputCustomDurVal').val(num);
+                        $('#selectCustomDurUnit').val(unit);
+                        $('#radioCustomDur').val(t.ai_reactivate_duration).prop('checked', true).trigger('change');
+                        $('#customDurationBox').removeClass('hidden');
+                    } else {
+                        $(`input[name="ai_reactivate_duration"][value="${t.ai_reactivate_duration}"]`).prop('checked', true).trigger('change');
+                        $('#customDurationBox').addClass('hidden');
+                    }
 
                     $('#aiReactivateKeyword').val(t.ai_reactivate_keyword);
                     $('#aiReactivateNotify').prop('checked', t.ai_reactivate_notify == 1).trigger('change');
@@ -904,7 +997,18 @@ $(document).ready(function() {
                             $('#aiFooterEnabled').prop('checked', d.ai_footer_enabled == 1);
                             $('#aiFooterText').val(d.ai_footer_text);
                             $('#aiHandoffText').val(d.ai_handoff_text);
-                            $(`input[name="ai_reactivate_duration"][value="${d.ai_reactivate_duration}"]`).prop('checked', true).trigger('change');
+                            if (d.ai_reactivate_duration && d.ai_reactivate_duration.startsWith('custom_')) {
+                                const raw = d.ai_reactivate_duration.replace('custom_', '');
+                                let unit = raw.endsWith('h') ? 'h' : 'm';
+                                let num = parseInt(raw) || 10;
+                                $('#inputCustomDurVal').val(num);
+                                $('#selectCustomDurUnit').val(unit);
+                                $('#radioCustomDur').val(d.ai_reactivate_duration).prop('checked', true).trigger('change');
+                                $('#customDurationBox').removeClass('hidden');
+                            } else {
+                                $(`input[name="ai_reactivate_duration"][value="${d.ai_reactivate_duration}"]`).prop('checked', true).trigger('change');
+                                $('#customDurationBox').addClass('hidden');
+                            }
                             $('#aiReactivateKeyword').val(d.ai_reactivate_keyword);
                             $('#aiReactivateNotify').prop('checked', d.ai_reactivate_notify == 1).trigger('change');
                             $('#aiReactivateMessage').val(d.ai_reactivate_message);

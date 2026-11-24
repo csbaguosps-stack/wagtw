@@ -534,6 +534,24 @@ async function unmuteContact(deviceId, phone, rawJid = null) {
 }
 
 /**
+ * Bersihkan data mute kontak yang masa berlakunya telah kadaluarsa dari database
+ */
+async function cleanupExpiredMutedContacts() {
+    try {
+        const res = await dbQuery(`
+            DELETE FROM ai_muted_contacts 
+            WHERE (muted_until IS NOT NULL AND muted_until <= NOW()) 
+               OR (muted_until IS NULL AND muted_date < CURRENT_DATE() AND reason != 'manual')
+        `);
+        if (res && res.affectedRows > 0) {
+            console.log(`[AI MUTE CLEANUP] Berhasil membersihkan ${res.affectedRows} riwayat mute yang telah berakhir. Bot AI aktif kembali.`);
+        }
+    } catch (e) {
+        console.warn('[AI MUTE CLEANUP] Error:', e.message);
+    }
+}
+
+/**
  * Deteksi pemicu Chat Admin dari teks pesan masuk
  */
 function isChatAdminTrigger(text) {
@@ -629,6 +647,12 @@ function isEndConversationKeyword(text, keywordSetting) {
 function calculateMutedUntil(durationSetting) {
     const now = new Date();
     switch (durationSetting) {
+        case '5_minutes':
+            return new Date(now.getTime() + 5 * 60 * 1000);
+        case '15_minutes':
+            return new Date(now.getTime() + 15 * 60 * 1000);
+        case '30_minutes':
+            return new Date(now.getTime() + 30 * 60 * 1000);
         case '1_hour':
             return new Date(now.getTime() + 1 * 60 * 60 * 1000);
         case '2_hours':
@@ -644,7 +668,22 @@ function calculateMutedUntil(durationSetting) {
         case 'manual':
             return null; // Tetap mute sampai admin ketik kata kunci / user ketik #ai on
         case 'next_day':
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
         default:
+            // Format custom manual: misal "custom_10m" (10 menit) atau "custom_2h" (2 jam)
+            if (typeof durationSetting === 'string' && durationSetting.startsWith('custom_')) {
+                const raw = durationSetting.replace('custom_', '').trim();
+                if (raw.endsWith('m')) {
+                    const mins = parseInt(raw);
+                    if (!isNaN(mins) && mins > 0) return new Date(now.getTime() + mins * 60 * 1000);
+                } else if (raw.endsWith('h')) {
+                    const hrs = parseInt(raw);
+                    if (!isNaN(hrs) && hrs > 0) return new Date(now.getTime() + hrs * 60 * 60 * 1000);
+                } else {
+                    const val = parseInt(raw);
+                    if (!isNaN(val) && val > 0) return new Date(now.getTime() + val * 60 * 1000);
+                }
+            }
             return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
     }
 }
@@ -661,12 +700,20 @@ function formatDateToSql(date) {
 /**
  * Cek apakah nomor kontak sedang di-mute pada device tertentu
  */
-async function isContactMuted(deviceId, phone) {
+async function isContactMuted(deviceId, phone, rawJid = null) {
     if (!deviceId || !phone) return false;
     try {
+        const checkPhones = [phone];
+        if (rawJid) {
+            const alt = normalizePhoneFromJid(rawJid);
+            if (alt && !checkPhones.includes(alt)) checkPhones.push(alt);
+        }
+
+        const placeholders = checkPhones.map(() => '?').join(',');
         const rows = await dbQuery(
-            'SELECT id, muted_date, muted_until, reason FROM ai_muted_contacts WHERE device_id = ? AND phone = ? ORDER BY id DESC LIMIT 1',
-            [deviceId, phone]
+            `SELECT id, muted_date, muted_until, reason FROM ai_muted_contacts 
+             WHERE device_id = ? AND phone IN (${placeholders}) ORDER BY id DESC LIMIT 1`,
+            [deviceId, ...checkPhones]
         );
         if (!rows.length) return false;
 
@@ -689,9 +736,10 @@ async function isContactMuted(deviceId, phone) {
             return true;
         }
 
-        // 3. Fallback jika muted_until null (next_day cek tanggal hari ini)
-        const todayStr = now.toISOString().slice(0, 10);
-        const rowDateStr = row.muted_date ? (row.muted_date instanceof Date ? row.muted_date.toISOString().slice(0, 10) : String(row.muted_date).slice(0, 10)) : '';
+        // 3. Fallback jika muted_until null (next_day cek tanggal hari ini berdasarkan waktu lokal server)
+        const pad = (n) => String(n).padStart(2, '0');
+        const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const rowDateStr = row.muted_date ? (row.muted_date instanceof Date ? `${row.muted_date.getFullYear()}-${pad(row.muted_date.getMonth() + 1)}-${pad(row.muted_date.getDate())}` : String(row.muted_date).slice(0, 10)) : '';
         if (rowDateStr === todayStr) {
             return true;
         } else {
@@ -748,7 +796,7 @@ async function touchMutedContact(deviceId, phone) {
         );
         const durationSetting = aiSets.length && aiSets[0].ai_reactivate_duration ? aiSets[0].ai_reactivate_duration : 'next_day';
 
-        if (durationSetting.includes('_hour')) {
+        if (durationSetting.includes('_hour') || durationSetting.includes('_minute') || durationSetting.startsWith('custom_')) {
             const newUntil = calculateMutedUntil(durationSetting);
             const newUntilSql = formatDateToSql(newUntil);
             await dbQuery(
@@ -867,7 +915,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
             }
 
             // 3. CEK STATUS MUTE (Pribadi maupun Grup)
-            const isMuted = await isContactMuted(deviceId, remotePhone);
+            const isMuted = await isContactMuted(deviceId, remotePhone, senderJid);
             if (isMuted) {
                 console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
                 // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
@@ -1619,6 +1667,13 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 const edm = msg.message.editedMessage.message.protocolMessage.editedMessage;
                 incomingText = edm.conversation || edm.extendedTextMessage?.text || '';
             }
+            // Ekstraksi caption dari media gambar, video, atau dokumen
+            if (!incomingText) {
+                incomingText = msg.message?.imageMessage?.caption
+                    || msg.message?.videoMessage?.caption
+                    || msg.message?.documentMessage?.caption
+                    || '';
+            }
 
             const waMsgId = msg.key.id;
             const isFromMe = msg.key.fromMe;
@@ -1639,7 +1694,20 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             const toPhone = isFromMe ? remotePhone : myPhone;
             const status = isFromMe ? 'sent' : 'delivered';
 
-            // Simpan Histori ke DB asal dia berupa teks
+            // ── FILTER PESAN SINKRONISASI / HISTORI LAMA ─────────────────────
+            // Jika pesan berumur > 120 detik (misal sinkronisasi riwayat chat saat reconnect),
+            // arsipkan ke database tapi JANGAN memicu aksi live (mute admin atau balasan otomatis).
+            const msgTimestampSec = Number(msg.messageTimestamp || 0);
+            const isOldMessage = msgTimestampSec > 0 && ((Date.now() / 1000) - msgTimestampSec > 120);
+
+            if (isOldMessage) {
+                if (incomingText) {
+                    await saveMessageToDB(sessionId, waMsgId, fromPhone, toPhone, 'text', incomingText, direction, status);
+                }
+                continue;
+            }
+
+            // Simpan Histori ke DB untuk pesan live
             if (incomingText) {
                 console.log(`[MSG ${direction.toUpperCase()}] ${sessionId} : ${incomingText.substring(0, 50)}`);
                 await saveMessageToDB(sessionId, waMsgId, fromPhone, toPhone, 'text', incomingText, direction, status);
@@ -1705,16 +1773,8 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 }
             }
 
-            // Proses webhook & autoreply (HANYA untuk pesan masuk baru (direction IN), BUKAN pesan diri sendiri, dan BUKAN sinkronisasi 'append')
-            if (!isFromMe && type === 'notify') {
-                // Lewati pesan kadaluarsa (> 3 menit, misalnya saat sinkronisasi pesan lama setelah reconnect)
-                const msgTimestampSec = Number(msg.messageTimestamp || 0);
-                const isOldMessage = msgTimestampSec > 0 && ((Date.now() / 1000) - msgTimestampSec > 180);
-                if (isOldMessage) {
-                    console.log(`[OLD MSG SKIPPED] Mengabaikan pesan lama (${senderJid}, timestamp: ${msgTimestampSec})`);
-                    continue;
-                }
-
+            // Proses webhook & autoreply untuk semua pesan masuk baru (baik 'notify' maupun pembukaan chat baru 'append')
+            if (!isFromMe) {
                 // ── OPT-OUT / UNSUBSCRIBE HANDLER (WHATSAPP ANTI-BAN PROTECTION) ──
                 // If recipient replies STOP / BERHENTI / UNSUBSCRIBE:
                 // Automatically add to blacklist & send a polite confirmation.
@@ -2609,6 +2669,9 @@ async function runHourlyAutoReconnect() {
 
 // Jalankan watchdog & auto-reconnect setiap 1 jam
 setInterval(runHourlyAutoReconnect, AUTO_RECONNECT_INTERVAL_MS);
+
+// Bersihkan data mute expired setiap 1 menit
+setInterval(cleanupExpiredMutedContacts, 60 * 1000);
 
 
 // ─── Auto-Restore Sessions on Startup ────────────────────────────────────────

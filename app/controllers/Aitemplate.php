@@ -119,8 +119,9 @@ class Aitemplate extends Controller {
         $message = trim($_POST['ai_reactivate_message'] ?? '');
         $notify = isset($_POST['ai_reactivate_notify']) ? intval($_POST['ai_reactivate_notify']) : 1;
 
-        $validDurations = ['1_hour', '2_hours', '3_hours', '6_hours', '12_hours', '24_hours', 'next_day', 'manual'];
-        if (!in_array($duration, $validDurations)) {
+        $validDurations = ['5_minutes', '15_minutes', '30_minutes', '1_hour', '2_hours', '3_hours', '6_hours', '12_hours', '24_hours', 'next_day', 'manual'];
+        $isCustomValid  = (bool)preg_match('/^custom_\d+[mh]$/', $duration);
+        if (!in_array($duration, $validDurations) && !$isCustomValid) {
             $duration = 'next_day';
         }
 
