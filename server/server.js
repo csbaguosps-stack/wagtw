@@ -253,6 +253,32 @@ function markBotSentMessage(msgId) {
     }
 }
 
+// ─── Incoming Message Deduplication Tracker ──────────────────────────────────
+// Melacak ID pesan masuk untuk mencegah eksekusi ganda (Baileys v7 sering memancarkan
+// event ganda 'notify' & 'append', atau retransmisi stanza dari WhatsApp)
+const processedIncomingMsgIds = new Map(); // waMsgId -> timestamp
+function isDuplicateIncomingMessage(waMsgId) {
+    if (!waMsgId) return false;
+    const now = Date.now();
+    if (processedIncomingMsgIds.has(waMsgId)) {
+        return true;
+    }
+    processedIncomingMsgIds.set(waMsgId, now);
+    if (processedIncomingMsgIds.size > 3000) {
+        const threshold = now - 10 * 60 * 1000; // Simpan cache selama 10 menit
+        for (const [id, ts] of processedIncomingMsgIds.entries()) {
+            if (ts < threshold) {
+                processedIncomingMsgIds.delete(id);
+            }
+        }
+    }
+    return false;
+}
+
+// ─── In-Flight Autoreply/AI Lock per Sender ───────────────────────────────────
+// Mencegah dua pemanggilan AI/Autoreply berjalan serentak untuk kontak yang sama
+const activeReplyLocks = new Set();
+
 // ─── DB Helper ────────────────────────────────────────────────────────────────
 async function updateDeviceStatus(sessionId, status, phone = null) {
     if (phone) {
@@ -740,83 +766,105 @@ async function touchMutedContact(deviceId, phone) {
 
 // ─── Autoreply Engine (dengan AI Groq) ──────────────────────────────────────
 async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
-    if (!incomingText || !sessionId) return;
+    if (!incomingText || !sessionId || !senderJid) return;
 
-    // Cari device beserta pengaturan bisnisnya berdasarkan session_id
-    const devices = await dbQuery('SELECT * FROM devices WHERE session_id = ? LIMIT 1', [sessionId]);
-    if (!devices.length) return;
+    // Cegah pemrosesan paralel/ganda untuk sesi dan nomor kontak yang sama
+    const lockKey = `${sessionId}:${senderJid}`;
+    if (activeReplyLocks.has(lockKey)) {
+        console.log(`[AUTOREPLY BUSY] Sedang memproses respon untuk ${senderJid}, mengabaikan pemrosesan paralel.`);
+        return;
+    }
+    activeReplyLocks.add(lockKey);
 
-    const deviceId = devices[0].id;
-    const userId = devices[0].user_id;
+    try {
+        // Cari device beserta pengaturan bisnisnya berdasarkan session_id
+        const devices = await dbQuery('SELECT * FROM devices WHERE session_id = ? LIMIT 1', [sessionId]);
+        if (!devices.length) return;
 
-    const session = sessions[sessionId];
-    if (!session?.socket || session.status !== 'connected') return;
-    const sock = session.socket;
+        const deviceId = devices[0].id;
+        const userId = devices[0].user_id;
 
-    // v7 LID: gunakan helper normalizePhoneFromJid
-    const remotePhone = normalizePhoneFromJid(senderJid);
-    const myPhone = session.phone;
+        const session = sessions[sessionId];
+        if (!session?.socket || session.status !== 'connected') return;
+        const sock = session.socket;
 
-    // ── Cek pengaturan AI per device ─────────────────────────────────────────
-    const aiSettings = await dbQuery(
-        'SELECT ads.*, ais.api_key, ais.model as ai_model, ais.label as ai_label FROM device_ai_settings ads LEFT JOIN ai_servers ais ON ais.id = ads.ai_server_id WHERE ads.device_id = ? LIMIT 1',
-        [deviceId]
-    );
+        // v7 LID: gunakan helper normalizePhoneFromJid
+        const remotePhone = normalizePhoneFromJid(senderJid);
+        const myPhone = session.phone;
 
-    const aiConfig = aiSettings.length ? aiSettings[0] : null;
-    const isAiEnabled = !!(aiConfig && (aiConfig.ai_enabled == 1 || aiConfig.ai_enabled === true || aiConfig.ai_enabled === '1'));
+        // ── Cek pengaturan AI per device ─────────────────────────────────────────
+        const aiSettings = await dbQuery(
+            'SELECT ads.*, ais.api_key, ais.model as ai_model, ais.label as ai_label FROM device_ai_settings ads LEFT JOIN ai_servers ais ON ais.id = ads.ai_server_id WHERE ads.device_id = ? LIMIT 1',
+            [deviceId]
+        );
 
-    // Cek Target Balasan (Pribadi/Grup)
-    const targetReply = aiConfig ? (aiConfig.target_reply || 'both') : 'both';
-    const isGroup = senderJid.endsWith('@g.us');
+        const aiConfig = aiSettings.length ? aiSettings[0] : null;
+        const isAiEnabled = !!(aiConfig && (aiConfig.ai_enabled == 1 || aiConfig.ai_enabled === true || aiConfig.ai_enabled === '1'));
 
-    // ── FITUR AI (UNMUTE, CHAT ADMIN, DAN MUTE) HANYA BERJALAN JIKA AI AKTIF ──
-    if (isAiEnabled) {
-        // 1. FITUR UNMUTE / REAKTIVASI AI (Pribadi maupun Grup)
-        const cleanCmd = incomingText.trim().toLowerCase();
-        const isCustomerReactivate = cleanCmd === '#ai on' || cleanCmd === '#ai aktif' || cleanCmd === '!ai on' || cleanCmd === '/ai on' || cleanCmd === 'aktifkan ai'
-            || isEndConversationKeyword(incomingText, aiConfig?.ai_reactivate_keyword);
+        // Cek Target Balasan (Pribadi/Grup)
+        const targetReply = aiConfig ? (aiConfig.target_reply || 'both') : 'both';
+        const isGroup = senderJid.endsWith('@g.us');
 
-        if (isCustomerReactivate) {
-            console.log(`[AI UNMUTE] Kontak/Grup ${remotePhone} meminta reaktivasi Bot AI (Teks: '${incomingText}').`);
-            await unmuteContact(deviceId, remotePhone, senderJid);
-            const reactivatedText = `🤖 *Bot AI telah diaktifkan kembali* untuk percakapan ini. Silakan tanyakan apa saja! 😊`;
-            try {
-                const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText }, { quoted: fullMsg });
-                markBotSentMessage(sentMsg?.key?.id);
-                await saveMessageToDB(sessionId, sentMsg?.key?.id || null, myPhone, remotePhone, 'text', reactivatedText, 'out', 'sent');
-            } catch (_) {
-                const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText });
-                markBotSentMessage(sentMsg?.key?.id);
-            }
-            return;
-        }
+        // ── FITUR AI (UNMUTE, CHAT ADMIN, DAN MUTE) HANYA BERJALAN JIKA AI AKTIF ──
+        if (isAiEnabled) {
+            // 1. FITUR UNMUTE / REAKTIVASI AI (Pribadi maupun Grup)
+            const cleanCmd = incomingText.trim().toLowerCase();
+            const isCustomerReactivate = cleanCmd === '#ai on' || cleanCmd === '#ai aktif' || cleanCmd === '!ai on' || cleanCmd === '/ai on' || cleanCmd === 'aktifkan ai'
+                || isEndConversationKeyword(incomingText, aiConfig?.ai_reactivate_keyword);
 
-        // 2. FITUR CHAT ADMIN & HANDOFF (Pribadi maupun Grup)
-        if (isChatAdminTrigger(incomingText)) {
-            console.log(`[CHAT ADMIN] Kontak/Grup ${remotePhone} memicu Chat Admin. Me-mute Bot AI.`);
-            await muteContact(deviceId, remotePhone, 'chat_admin');
+            if (isCustomerReactivate) {
+                console.log(`[AI UNMUTE] Kontak/Grup ${remotePhone} meminta reaktivasi Bot AI (Teks: '${incomingText}').`);
+                await unmuteContact(deviceId, remotePhone, senderJid);
+                const reactivatedText = `🤖 *Bot AI telah diaktifkan kembali* untuk percakapan ini. Silakan tanyakan apa saja! 😊`;
+                
+                // Tampilkan simulasi mengetik singkat
+                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+                await new Promise(r => setTimeout(r, 1200));
 
-            // Gunakan template kustom handoff dari device_ai_settings jika ada
-            const handoffText = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
-                ? aiConfig.ai_handoff_text.trim()
-                : `Baik, permintaan Anda telah kami teruskan ke *Admin / Staf kami* 👤\n\nAdmin kami akan segera membaca dan merespons chat Anda secara langsung. Sementara ini, Bot AI dinonaktifkan untuk percakapan ini dan akan aktif kembali besok hari.\n\nTerima kasih atas kesabaran Anda! 🙏`;
-
-            try {
-                let sentMsg = null;
                 try {
-                    sentMsg = await sock.sendMessage(senderJid, { text: handoffText }, { quoted: fullMsg });
-                } catch (quotedErr) {
-                    sentMsg = await sock.sendMessage(senderJid, { text: handoffText });
+                    const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText }, { quoted: fullMsg });
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                    markBotSentMessage(sentMsg?.key?.id);
+                    await saveMessageToDB(sessionId, sentMsg?.key?.id || null, myPhone, remotePhone, 'text', reactivatedText, 'out', 'sent');
+                } catch (_) {
+                    const sentMsg = await sock.sendMessage(senderJid, { text: reactivatedText }).catch(() => { });
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                    markBotSentMessage(sentMsg?.key?.id);
                 }
-                const waMsgId = sentMsg?.key?.id || null;
-                markBotSentMessage(waMsgId);
-                await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', handoffText, 'out', 'sent');
-            } catch (err) {
-                console.error('[Chat Admin Handoff Send Error]', err.message);
+                return;
             }
-            return; // Hentikan di sini, jangan jalankan AI atau autoreply
-        }
+
+            // 2. FITUR CHAT ADMIN & HANDOFF (Pribadi maupun Grup)
+            if (isChatAdminTrigger(incomingText)) {
+                console.log(`[CHAT ADMIN] Kontak/Grup ${remotePhone} memicu Chat Admin. Me-mute Bot AI.`);
+                await muteContact(deviceId, remotePhone, 'chat_admin');
+
+                // Gunakan template kustom handoff dari device_ai_settings jika ada
+                const handoffText = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
+                    ? aiConfig.ai_handoff_text.trim()
+                    : `Baik, permintaan Anda telah kami teruskan ke *Admin / Staf kami* 👤\n\nAdmin kami akan segera membaca dan merespons chat Anda secara langsung. Sementara ini, Bot AI dinonaktifkan untuk percakapan ini dan akan aktif kembali besok hari.\n\nTerima kasih atas kesabaran Anda! 🙏`;
+
+                // Tampilkan simulasi mengetik singkat
+                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+                await new Promise(r => setTimeout(r, 1500));
+
+                try {
+                    let sentMsg = null;
+                    try {
+                        sentMsg = await sock.sendMessage(senderJid, { text: handoffText }, { quoted: fullMsg });
+                    } catch (quotedErr) {
+                        sentMsg = await sock.sendMessage(senderJid, { text: handoffText });
+                    }
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                    const waMsgId = sentMsg?.key?.id || null;
+                    markBotSentMessage(waMsgId);
+                    await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', handoffText, 'out', 'sent');
+                } catch (err) {
+                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                    console.error('[Chat Admin Handoff Send Error]', err.message);
+                }
+                return; // Hentikan di sini, jangan jalankan AI atau autoreply
+            }
 
         // 3. CEK STATUS MUTE (Pribadi maupun Grup)
         const isMuted = await isContactMuted(deviceId, remotePhone);
@@ -934,13 +982,12 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
 
         if (matched) {
             keywordMatched = true;
-            const delayMs = (rule.delay || 1) * 1000;
+            const configuredDelay = (rule.delay || 1) * 1000;
+            // Simulasi mengetik manusia (minimal 1.5 detik agar tampak sedang mengetik)
+            const typingDuration = Math.max(configuredDelay, 1500);
 
-            if (rule.set_typing) {
-                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-            }
-
-            await new Promise(r => setTimeout(r, delayMs));
+            await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+            await new Promise(r => setTimeout(r, typingDuration));
 
             try {
                 // Gunakan quoted msg agar thread konteks valid (terutama pada pesan pribadi / LID)
@@ -952,6 +999,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                     sentMsg = await sock.sendMessage(senderJid, { text: rule.reply_text });
                 }
 
+                await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
                 console.log(`[Autoreply] "${rule.trigger_word}" matched (${ruleTarget}) → kirim ke ${senderJid}`);
 
                 // Simpan balasan manual autoreply ke histori DB
@@ -959,6 +1007,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg) {
                 markBotSentMessage(waMsgId);
                 await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', rule.reply_text, 'out', 'sent');
             } catch (err) {
+                await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
                 console.error('[Autoreply Send Error]', err.message);
             }
             break;
@@ -1140,13 +1189,37 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                     ? aiConfig.ai_footer_text.trim()
                     : '────────────────────────\n💬 *Butuh bantuan staf / Admin?*\nKetik *Chat Admin* untuk berbicara langsung dengan tim kami.';
 
-                if (!aiReply.toLowerCase().includes('chat admin') && !aiReply.toLowerCase().includes('butuh bantuan staf')) {
+                // Cek apakah footer sudah tertera di output aiReply agar tidak terduplikasi ganda
+                const cleanFooter = customFooter.replace(/[-_=*|#\s]/g, '').trim().toLowerCase();
+                const cleanAiReply = aiReply.replace(/[-_=*|#\s]/g, '').toLowerCase();
+                const isAlreadyInReply = (cleanFooter.length > 5 && cleanAiReply.includes(cleanFooter.substring(0, 25)))
+                    || aiReply.toLowerCase().includes('chat admin')
+                    || aiReply.toLowerCase().includes('butuh bantuan staf');
+
+                if (!isAlreadyInReply) {
                     aiReply = aiReply + '\n\n' + customFooter;
                 }
             }
 
-            // Hentikan status mengetik
-            await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+            // ── SIMULASI MENGETIK MANUSIA (HUMANIZED TYPING DELAY) ────────────
+            // Menghitung durasi mengetik yang natural berdasarkan panjang teks balasan
+            // Kecepatan mengetik manusia: ~25ms per karakter + jeda acak (jitter 800-2000ms)
+            const charDelay = Math.floor(aiReply.length * 25);
+            const jitter = Math.floor(Math.random() * 1200) + 800;
+            const typingDuration = Math.min(6500, Math.max(2500, charDelay + jitter));
+
+            console.log(`[AI TYPING] Mensimulasikan mengetik ke ${senderJid} (${aiReply.length} karakter, jeda ${typingDuration}ms)...`);
+            await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+
+            // Jika durasi lebih dari 3 detik, perbarui status 'composing' di tengah jeda agar tidak timeout di WhatsApp
+            if (typingDuration > 3000) {
+                const halfDelay = Math.floor(typingDuration / 2);
+                await new Promise(r => setTimeout(r, halfDelay));
+                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+                await new Promise(r => setTimeout(r, typingDuration - halfDelay));
+            } else {
+                await new Promise(r => setTimeout(r, typingDuration));
+            }
 
             try {
                 let sentMsg = null;
@@ -1159,6 +1232,9 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                     sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
                 }
 
+                // Hentikan status mengetik SETELAH pesan sukses terkirim
+                await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+
                 const waMsgId = sentMsg?.key?.id || null;
                 markBotSentMessage(waMsgId);
                 console.log(`[AI] Balasan Groq teks berhasil terkirim ke ${senderJid}`);
@@ -1166,6 +1242,7 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 // Simpan balasan ke histori DB agar muncul di halaman "Lihat Chat"
                 await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', aiReply, 'out', 'sent');
             } catch (err) {
+                await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
                 console.error('[AI Send Error]', err.message);
             }
             return; // Selesai, jangan lanjut ke autoreply biasa
@@ -1174,7 +1251,10 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
             console.warn('[AI] Semua server Groq gagal, fallback ke autoreply keyword...');
         }
     }
-
+    } finally {
+        // Lepas lock aktifitas autoreply untuk sender ini
+        activeReplyLocks.delete(lockKey);
+    }
 }
 
 // ─── Create / Start WhatsApp Session ─────────────────────────────────────────
@@ -1525,6 +1605,16 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             const waMsgId = msg.key.id;
             const isFromMe = msg.key.fromMe;
 
+            // ── ANTI-DUPLIKASI PESAN MASUK ───────────────────────────────────
+            // Baileys v7 sering memancarkan 'notify' disusul 'append' atau retry stanza
+            // untuk pesan yang sama. Jika pesan dari kontak sudah pernah diterima, lewati.
+            if (!isFromMe && waMsgId) {
+                if (isDuplicateIncomingMessage(waMsgId)) {
+                    console.log(`[DEDUPLICATE] Mengabaikan pesan masuk duplikat (ID: ${waMsgId}) dari ${senderJid}`);
+                    continue;
+                }
+            }
+
             // Tentukan arah & nomor
             const direction = isFromMe ? 'out' : 'in';
             const fromPhone = isFromMe ? myPhone : remotePhone;
@@ -1597,8 +1687,16 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                 }
             }
 
-            // Proses webhook & autoreply (HANYA untuk pesan masuk (direction IN) & BUKAN pesan diri sendiri)
-            if (!isFromMe) {
+            // Proses webhook & autoreply (HANYA untuk pesan masuk baru (direction IN), BUKAN pesan diri sendiri, dan BUKAN sinkronisasi 'append')
+            if (!isFromMe && type === 'notify') {
+                // Lewati pesan kadaluarsa (> 3 menit, misalnya saat sinkronisasi pesan lama setelah reconnect)
+                const msgTimestampSec = Number(msg.messageTimestamp || 0);
+                const isOldMessage = msgTimestampSec > 0 && ((Date.now() / 1000) - msgTimestampSec > 180);
+                if (isOldMessage) {
+                    console.log(`[OLD MSG SKIPPED] Mengabaikan pesan lama (${senderJid}, timestamp: ${msgTimestampSec})`);
+                    continue;
+                }
+
                 // ── OPT-OUT / UNSUBSCRIBE HANDLER (WHATSAPP ANTI-BAN PROTECTION) ──
                 // If recipient replies STOP / BERHENTI / UNSUBSCRIBE:
                 // Automatically add to blacklist & send a polite confirmation.
