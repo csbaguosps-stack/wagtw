@@ -96,7 +96,7 @@ class Api extends Controller {
     }
 
     // ─── Helper: cURL ke WAGTW Node.js Engine ─────────────────────────────
-    private function callNode($method, $path, $body = null)
+    protected function callNode($method, $path, $body = null)
     {
         $urls = [$this->nodeUrl . $path];
         if (strpos($this->nodeUrl, '127.0.0.1:3001') === false) {
@@ -150,7 +150,22 @@ class Api extends Controller {
     {
         try {
             if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-                echo json_encode(['status' => false, 'reason' => 'Method not allowed. Use POST.']);
+                echo json_encode([
+                    'status' => false,
+                    'reason' => 'Method not allowed. Use POST.',
+                    'doc'    => defined('BASEURL') ? BASEURL . '/webhook' : '/webhook',
+                    'usage'  => [
+                        'method'  => 'POST',
+                        'headers' => [
+                            'Authorization' => '{TOKEN_DEVICE_ANDA}',
+                            'Content-Type'  => 'application/json'
+                        ],
+                        'body'    => [
+                            'target'  => '08123456789 (atau 628123456789, atau ID grup)',
+                            'message' => 'Halo dari API WAGTW'
+                        ]
+                    ]
+                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
                 return;
             }
 
