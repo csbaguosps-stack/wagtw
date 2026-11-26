@@ -1669,12 +1669,12 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
                             SELECT direction, message 
                             FROM messages 
                             WHERE device_id = ? AND (from_phone = ? OR to_phone = ?)
-                            ORDER BY id DESC LIMIT 8
+                            ORDER BY id DESC LIMIT 5
                         `, [deviceId, remotePhone, remotePhone]);
                         if (dbMsgs && dbMsgs.length > 0) {
                             chatContext = dbMsgs.reverse().map(m => ({
                                 role: m.direction === 'out' ? 'assistant' : 'user',
-                                content: m.message
+                                content: (typeof m.message === 'string' && m.message.length > 400) ? (m.message.substring(0, 400) + '...') : m.message
                             })).filter(c => c.content);
                         }
                     } catch (dbHistErr) {
@@ -1777,37 +1777,54 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 }
             }
 
-            // ── Kumpulkan daftar server yang akan dicoba
+            // ── Kumpulkan daftar server yang akan dicoba (dengan Multi-Server Failover)
             let serversToTry = [];
             if (aiConfig.ai_server_id && aiConfig.api_key) {
-                serversToTry.push({ api_key: aiConfig.api_key, label: aiConfig.ai_label });
-            } else {
-                serversToTry = await dbQuery('SELECT * FROM ai_servers WHERE is_active = 1 ORDER BY priority DESC, id ASC');
-            }
-
-            // ── Kumpulkan daftar model yang akan dicoba (sesuai yang aktif di menu Model AI)
-            let modelsToTry = [];
-            const decommModels = ['llama3-8b-8192', 'llama3-70b-8192', 'llama-3.1-70b-versatile'];
-
-            // Selalu utamakan model-model yang AKTIF di tabel ai_models sesuai prioritas
-            const activeDbModels = await dbQuery('SELECT model_name FROM ai_models WHERE is_active = 1 ORDER BY priority DESC, id ASC');
-            const activeModelNames = activeDbModels.map(m => m.model_name);
-
-            if (aiConfig.model && aiConfig.model !== 'auto' && !decommModels.includes(aiConfig.model) && activeModelNames.includes(aiConfig.model)) {
-                modelsToTry.push({ model_name: aiConfig.model });
-                for (const m of activeDbModels) {
-                    if (m.model_name !== aiConfig.model) {
-                        modelsToTry.push(m);
+                // Utamakan server pilihan device terlebih dahulu
+                serversToTry.push({ id: aiConfig.ai_server_id, api_key: aiConfig.api_key, label: aiConfig.ai_label || 'Primary Server' });
+                // Tambahkan server-server aktif lainnya sebagai cadangan otomatis (failover) jika server utama limit/gagal
+                try {
+                    const otherServers = await dbQuery(
+                        'SELECT id, api_key, label FROM ai_servers WHERE is_active = 1 AND id != ? ORDER BY priority DESC, id ASC',
+                        [aiConfig.ai_server_id]
+                    );
+                    for (const os of otherServers) {
+                        serversToTry.push(os);
                     }
-                }
-            } else if (activeDbModels.length > 0) {
-                modelsToTry = activeDbModels;
+                } catch (_) { }
             } else {
-                // Fallback resmi jika belum ada model yang didaftarkan di Model AI
-                modelsToTry.push({ model_name: 'llama-3.3-70b-versatile' });
+                serversToTry = await dbQuery('SELECT id, api_key, label FROM ai_servers WHERE is_active = 1 ORDER BY priority DESC, id ASC');
             }
 
-            // ── Lakukan percobaan (Auto-Switch 2D)
+            // ── Kumpulkan daftar model yang akan dicoba (dengan Auto-Fallback ke Model Berkecepatan & Kuota Tinggi)
+            let modelsToTry = [];
+            const decommModels = ['llama3-8b-8192', 'llama3-70b-8192', 'llama-3.1-70b-versatile', 'llama-3.2-1b-preview', 'llama-3.2-3b-preview'];
+
+            const activeDbModels = await dbQuery('SELECT model_name FROM ai_models WHERE is_active = 1 ORDER BY priority DESC, id ASC');
+
+            // 1. Jika device memilih model tertentu (misal llama-3.3-70b-versatile)
+            if (aiConfig.model && aiConfig.model !== 'auto' && !decommModels.includes(aiConfig.model)) {
+                modelsToTry.push({ model_name: aiConfig.model });
+            }
+
+            // 2. Tambahkan model-model aktif dari database sesuai prioritas
+            for (const m of activeDbModels) {
+                if (!decommModels.includes(m.model_name) && !modelsToTry.some(x => x.model_name === m.model_name)) {
+                    modelsToTry.push(m);
+                }
+            }
+
+            // 3. PENTING: Selalu sediakan 'llama-3.1-8b-instant' sebagai model penyelamat (safety fallback)
+            // Model ini memiliki kuota 20.000 TPM (3.3x lipat dari 70b) dan 14.400 RPD, serta respon sangat kilat (<0.5 detik).
+            // Jika model 70B terkena rate limit 6.000 TPM, 8B Instant akan langsung mengambil alih tanpa error!
+            if (!modelsToTry.some(x => x.model_name === 'llama-3.1-8b-instant')) {
+                modelsToTry.push({ model_name: 'llama-3.1-8b-instant' });
+            }
+            if (!modelsToTry.some(x => x.model_name === 'llama-3.3-70b-versatile')) {
+                modelsToTry.unshift({ model_name: 'llama-3.3-70b-versatile' });
+            }
+
+            // ── Lakukan percobaan (Auto-Switch 2D: Multi-Server x Multi-Model)
             if (serversToTry.length === 0) {
                 console.warn(`[AI] Device ${deviceId} — Tidak ada API Key aktif (Server AI kosong)! Harap tambahkan API Key Groq di menu Server AI.`);
             }
@@ -1815,10 +1832,12 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
             let isRateLimited = false;
 
             if (serversToTry.length > 0 && modelsToTry.length > 0) {
-                outerLoop: for (const srv of serversToTry) {
-                    for (const mod of modelsToTry) {
-                        console.log(`[Groq] Trying server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
-                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext);
+                outerLoop: for (let sIdx = 0; sIdx < serversToTry.length; sIdx++) {
+                    const srv = serversToTry[sIdx];
+                    for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
+                        const mod = modelsToTry[mIdx];
+                        console.log(`[Groq] Trying server ${sIdx + 1}/${serversToTry.length}: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
+                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext, 450);
                         if (groqRes && groqRes.ok && groqRes.text) {
                             aiReply = groqRes.text;
                             console.log(`[Groq] ✓ Got reply from server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
@@ -1832,8 +1851,10 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                         console.warn(`[Groq] ✗ Failed on server: ${srv.label || 'Auto'} | Model: ${mod.model_name} [${errStatus}: ${errMsg}], switching...`);
 
                         // Deteksi Rate Limit / Quota Exceeded (429 atau pesan limit)
-                        if (errStatus === '429' || (typeof errMsg === 'string' && /rate[_\s-]?limit|too many requests|tpm|rpm|quota|tokens per minute|requests per minute/i.test(errMsg))) {
+                        if (groqRes?.isRateLimit || errStatus === '429' || (typeof errMsg === 'string' && /rate[_\s-]?limit|too many requests|tpm|rpm|quota|tokens per minute|requests per minute/i.test(errMsg))) {
                             isRateLimited = true;
+                            // Jeda singkat 600ms sebelum beralih ke model / key cadangan
+                            await new Promise(r => setTimeout(r, 600));
                         }
 
                         try {
