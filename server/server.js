@@ -670,11 +670,6 @@ function getJidFromPhone(phone, session = null) {
     if (!phone) return '';
     const cleanPhone = phone.toString().trim();
     if (cleanPhone.includes('@')) {
-        // Jika format salah diakhiri @s.whatsapp.net padahal digitnya adalah LID (>= 14 digit)
-        if (cleanPhone.endsWith('@s.whatsapp.net')) {
-            const rawDigits = normalizePhoneFromJid(cleanPhone);
-            if (rawDigits.length >= 14) return `${rawDigits}@lid`;
-        }
         return cleanPhone;
     }
 
@@ -701,8 +696,8 @@ function getJidFromPhone(phone, session = null) {
         return cleanPhone.endsWith('@g.us') ? cleanPhone : `${cleanPhone}@g.us`;
     }
 
-    // 3. Format LID (Linked Identity Device): nomor WA baru berdigit >= 14 (misal 130588497444897)
-    if (cleanPhone.length >= 14) {
+    // 3. Format LID (Linked Identity Device): nomor WA berdigit >= 14 yang BUKAN nomor telepon Indonesia/normal
+    if (cleanPhone.length >= 14 && !cleanPhone.startsWith('62') && !cleanPhone.startsWith('0')) {
         return `${cleanPhone}@lid`;
     }
 
@@ -844,6 +839,36 @@ async function cleanupExpiredMutedContacts() {
     } catch (e) {
         console.warn('[AI MUTE CLEANUP] Error:', e.message);
     }
+}
+
+/**
+ * Deteksi apakah teks pesan adalah template bawaan iklan Meta / pertanyaan promo & lokasi
+ * (Contoh: "Saya Mau Cek Mata Gratis !!", "Lok dimana ya", "Paket kacamata 75K")
+ */
+function isAdLeadContent(text) {
+    if (!text || typeof text !== 'string') return false;
+    const clean = text.trim().toLowerCase();
+
+    // 1. Template bawaan tombol Iklan Meta (Winsee Optik)
+    const adTemplates = [
+        'cek mata gratis', 'cek mata', 'periksa mata gratis', 'tes mata gratis',
+        'paket kacamata', 'paket kacamata 75k', '75k', 'promo kacamata',
+        'frame dan lensa gratis', 'lensa gratis', 'frame gratis',
+        'promo optik', 'koleksi optik', 'diskon optik',
+        'mau kacamata', 'beli kacamata', 'pesan kacamata', 'gratis lensa'
+    ];
+    if (adTemplates.some(tpl => clean.includes(tpl))) return true;
+
+    // 2. Pertanyaan lokasi / cabang toko optik yang sering ditanyakan pelanggan iklan
+    const locationKeywords = [
+        'lok dimana', 'lok dimana ya', 'lokasi dimana', 'lokasi di mana', 'alamat dimana',
+        'alamat di mana', 'posisi dimana', 'ada di mana', 'ada dimana', 'daerah mana',
+        'cabang dimana', 'cabang di mana', 'optik nya dimana', 'optiknya dimana', 'tokonya dimana',
+        'di mn', 'dmn', 'dimn', 'optiknya', 'optik nya'
+    ];
+    if (locationKeywords.some(kw => clean.includes(kw))) return true;
+
+    return false;
 }
 
 /**
@@ -1340,11 +1365,11 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
         const targetReply = aiConfig ? (aiConfig.target_reply || 'both') : 'both';
         const isGroup = senderJid.endsWith('@g.us');
 
-        // ── DETEKSI PESAN DARI IKLAN META (Facebook / Instagram Ads - CTWA) ───
-        const isFromMetaAd = isMetaAdMessage(fullMsg);
+        // ── DETEKSI PESAN DARI IKLAN META (Facebook / Instagram Ads - CTWA) ATAU TEMPLATE PROMO ───
+        const isFromMetaAd = isMetaAdMessage(fullMsg) || isAdLeadContent(incomingText);
         if (isFromMetaAd) {
-            console.log(`[META ADS LEAD] Kontak ${remotePhone} (${senderJid}) terdeteksi datang dari Iklan META. Memastikan Bot AI langsung merespons.`);
-            // Jika kontak sebelumnya pernah di-mute (misal karena salah deteksi sesi lama), otomatis unmute sekarang!
+            console.log(`[META ADS / PROMO LEAD] Kontak ${remotePhone} (${senderJid}) terdeteksi lead iklan/promo: "${incomingText.substring(0, 50)}". Memastikan Bot AI langsung merespons.`);
+            // Jika kontak sebelumnya pernah di-mute (termasuk false mute admin_talking / sesi lama), otomatis unmute sekarang!
             await unmuteContact(deviceId, remotePhone, senderJid);
         }
 
@@ -1424,14 +1449,46 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
             }
 
             // 3. CEK STATUS MUTE (Pribadi maupun Grup)
-            // Lead baru dari Iklan Meta tidak boleh diblokir oleh mute lama agar AI langsung merespons
+            // Lead baru dari Iklan Meta / Promo tidak boleh diblokir oleh mute lama agar AI langsung merespons
             if (!skipMuteCheck && !isFromMetaAd) {
                 const isMuted = await isContactMuted(deviceId, remotePhone, senderJid);
                 if (isMuted) {
-                    console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
-                    // Perpanjang timer mute karena ada pesan baru ("setelah tidak ada respon")
-                    await touchMutedContact(deviceId, remotePhone);
-                    return; // Hentikan di sini, jangan membalas
+                    // PENTING: Cek apakah mute ini adalah 'admin_talking' yang disebabkan oleh salam otomatis / false mute
+                    // Jika pelanggan sedang bertanya info toko/produk dan tidak ada balasan admin baru,
+                    // maka hapus mute dan izinkan AI membalas langsung!
+                    const mutedRows = await dbQuery(
+                        'SELECT reason, updated_at FROM ai_muted_contacts WHERE device_id = ? AND phone = ? ORDER BY id DESC LIMIT 1',
+                        [deviceId, remotePhone]
+                    );
+
+                    const isFalseAdminMute = mutedRows.length && mutedRows[0].reason === 'admin_talking';
+                    if (isFalseAdminMute) {
+                        const inquiryKeywords = [
+                            'dimana', 'di mana', 'lokasi', 'alamat', 'cabang', 'toko',
+                            'harga', 'berapa', 'biaya', 'ongkir', 'tarif', 'price',
+                            'promo', 'diskon', 'voucher', 'potongan', 'gratis', 'free',
+                            'jam buka', 'buka jam', 'tutup jam', 'operasional', 'jadwal',
+                            'kacamata', 'frame', 'lensa', 'minus', 'plus', 'silinder',
+                            'periksa', 'cek mata', 'resep', 'optik', 'bisa', 'apakah', 'ada',
+                            'lok dimana', 'lokasi optik', 'alamat optik'
+                        ];
+                        const cleanLower = incomingText.trim().toLowerCase();
+                        const isAskingQuestion = inquiryKeywords.some(kw => cleanLower.includes(kw));
+
+                        if (isAskingQuestion) {
+                            console.log(`[AI UNMUTE - ACTIVE INQUIRY] Kontak ${remotePhone} sedang bertanya ("${incomingText.substring(0, 50)}") dan tidak ada staf manusia aktif. Mengaktifkan AI untuk membalas...`);
+                            await unmuteContact(deviceId, remotePhone, senderJid);
+                            // Lanjut proses balasan AI!
+                        } else {
+                            console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
+                            await touchMutedContact(deviceId, remotePhone);
+                            return;
+                        }
+                    } else {
+                        console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin (${mutedRows[0]?.reason || 'muted'}). Bot AI dinonaktifkan.`);
+                        await touchMutedContact(deviceId, remotePhone);
+                        return;
+                    }
                 }
             }
         }
@@ -1834,16 +1891,31 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 try {
                     let sentMsg = null;
 
+                    // Deteksi jika obrolan menggunakan pesan sementara / disappearing (ephemeral)
+                    let ephemeralExpiration = undefined;
+                    if (fullMsg?.message?.ephemeralMessage) {
+                        ephemeralExpiration = fullMsg.message.ephemeralMessage.message?.extendedTextMessage?.contextInfo?.expiration
+                            || fullMsg.message.ephemeralMessage.contextInfo?.expiration
+                            || 604800; // 7 hari default
+                    } else if (fullMsg?.contextInfo?.expiration) {
+                        ephemeralExpiration = fullMsg.contextInfo.expiration;
+                    }
+
+                    const sendOptions = {};
+                    if (ephemeralExpiration) {
+                        sendOptions.ephemeralExpiration = ephemeralExpiration;
+                    }
+
                     // Kirim teks standar WhatsApp yang 100% didukung dan stabil di semua perangkat (Android, iPhone, WA Web)
                     try {
                         if (fullMsg && fullMsg.key?.id) {
-                            sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, { quoted: fullMsg });
+                            sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, { ...sendOptions, quoted: fullMsg });
                         } else {
-                            sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
+                            sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, sendOptions);
                         }
                     } catch (quotedErr) {
                         console.warn(`[AI Quoted Error] ${quotedErr.message}, mencoba kirim pesan langsung tanpa quote...`);
-                        sentMsg = await sock.sendMessage(senderJid, { text: aiReply });
+                        sentMsg = await sock.sendMessage(senderJid, { text: aiReply }, sendOptions);
                     }
 
                     // Hentikan status mengetik SETELAH pesan sukses terkirim
@@ -2269,12 +2341,42 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             if (isFromMe) {
                 // Deteksi jika pesan ini diketik langsung oleh HUMAN ADMIN di HP atau WhatsApp Web
                 if (!botSentMessageIds.has(waMsgId)) {
+                    // 1. Abaikan jika teks kosong (misal protocol message update timer pesan sementara 7 hari, read receipt, stubs)
+                    if (!incomingText || typeof incomingText !== 'string' || !incomingText.trim()) {
+                        continue;
+                    }
+
+                    // 2. Abaikan jika pesan ini berasal dari Iklan Meta / CTWA handshake
+                    if (isMetaAdMessage(msg)) {
+                        console.log(`[ADMIN MESSAGE IGNORED] Pesan otomatis CTA Iklan Meta terdeteksi. Jangan mute Bot AI.`);
+                        continue;
+                    }
+
+                    // 3. Abaikan jika pesan ini adalah "Salam otomatis" atau Pesan Sambutan WhatsApp Business
+                    const lowerText = incomingText.toLowerCase().trim();
+                    if (lowerText.includes('salam otomatis') || lowerText.includes('pesan otomatis') || lowerText.includes('pesan di luar jam kerja')) {
+                        console.log(`[ADMIN MESSAGE IGNORED] Pesan salam otomatis WhatsApp Business terdeteksi. Jangan mute Bot AI.`);
+                        continue;
+                    }
+
+                    // 4. Periksa apakah ini pesan greeting promosi iklan (seperti "Halo Optik winsee punya paket kacamata 75K...")
+                    if (lowerText.includes('halo optik winsee') || lowerText.includes('paket kacamata 75k') || lowerText.includes('cek koleksinya') || lowerText.includes('cek mata gratis')) {
+                        console.log(`[ADMIN MESSAGE IGNORED] Pesan promosi pembuka iklan terdeteksi. Jangan mute Bot AI.`);
+                        continue;
+                    }
+
                     let devId = sessions[sessionId]?.deviceId;
                     if (!devId) {
-                        const devRows = await dbQuery('SELECT id FROM devices WHERE session_id = ? LIMIT 1', [sessionId]);
+                        const devRows = await dbQuery('SELECT id, welcome_message, away_message FROM devices WHERE session_id = ? LIMIT 1', [sessionId]);
                         if (devRows.length && devRows[0].id) {
                             devId = devRows[0].id;
                             if (sessions[sessionId]) sessions[sessionId].deviceId = devId;
+                            if (devRows[0].welcome_message && lowerText === devRows[0].welcome_message.toLowerCase().trim()) {
+                                continue;
+                            }
+                            if (devRows[0].away_message && lowerText === devRows[0].away_message.toLowerCase().trim()) {
+                                continue;
+                            }
                         }
                     }
                     if (devId && remotePhone) {
