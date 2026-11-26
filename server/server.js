@@ -37,14 +37,63 @@ const { Boom } = require('@hapi/boom');
 const { callGroqAutoSwitch, callGroq } = require('./groq');
 const { searchAutoSwitch, needsWebSearch } = require('./search');
 
+// ─── Cache Pemetaan LID <-> Phone Number (Baileys v7) ─────────────────────────
+const lidToPhoneMap = new Map(); // lidDigits -> realPhoneDigits
+const phoneToLidMap = new Map(); // realPhoneDigits -> lidDigits
+
+function getRawPhoneFromJid(jid) {
+    if (!jid) return '';
+    return jid.split('@')[0].split(':')[0];
+}
+
+function recordLidPhoneMapping(lidJidOrPhone, pnJidOrPhone, sock = null) {
+    if (!lidJidOrPhone || !pnJidOrPhone) return;
+    const raw1 = getRawPhoneFromJid(lidJidOrPhone);
+    const raw2 = getRawPhoneFromJid(pnJidOrPhone);
+    if (!raw1 || !raw2 || raw1 === raw2) return;
+
+    let lidDigits = null;
+    let pnDigits = null;
+
+    if (lidJidOrPhone.endsWith('@lid') || (raw1.length >= 14 && !raw1.startsWith('62'))) {
+        lidDigits = raw1;
+        pnDigits = raw2;
+    } else if (pnJidOrPhone.endsWith('@lid') || (raw2.length >= 14 && !raw2.startsWith('62'))) {
+        lidDigits = raw2;
+        pnDigits = raw1;
+    } else if (raw1.startsWith('62') && !raw2.startsWith('62')) {
+        pnDigits = raw1;
+        lidDigits = raw2;
+    } else if (raw2.startsWith('62') && !raw1.startsWith('62')) {
+        pnDigits = raw2;
+        lidDigits = raw1;
+    }
+
+    if (lidDigits && pnDigits) {
+        lidToPhoneMap.set(lidDigits, pnDigits);
+        phoneToLidMap.set(pnDigits, lidDigits);
+
+        if (sock?.signalRepository?.lidMapping?.storeLIDPNMappings) {
+            try {
+                sock.signalRepository.lidMapping.storeLIDPNMappings([
+                    { lid: `${lidDigits}@lid`, pn: `${pnDigits}@s.whatsapp.net` }
+                ]);
+            } catch (_) { }
+        }
+    }
+}
+
 // ─── Helper: Normalisasi Phone Number dari JID (handle LID v7) ───────────────
 // Baileys v7 memperkenalkan LID (Linked Identity Device).
 // Format JID baru: "628xxx:12@lid" atau "628xxx:12@s.whatsapp.net"
-// Fungsi ini mengekstrak nomor telepon bersih dari semua format.
+// Fungsi ini mengekstrak nomor telepon bersih dari semua format, dan memetakan LID ke nomor asli jika ada.
 function normalizePhoneFromJid(jid) {
     if (!jid) return '';
-    // Semua format: strip domain, strip :device
-    return jid.split('@')[0].split(':')[0];
+    const raw = getRawPhoneFromJid(jid);
+    if (lidToPhoneMap.has(raw)) {
+        return lidToPhoneMap.get(raw);
+    }
+    return raw;
 }
 
 // ─── In-Memory Store (kompatibel dengan Baileys v7 — makeInMemoryStore dihapus dari core) ──
@@ -562,19 +611,34 @@ function processTableRows(rows) {
 async function unmuteContact(deviceId, phone, rawJid = null) {
     if (!deviceId || !phone) return;
     try {
-        // 1. Hapus langsung berdasarkan phone / LID
-        await dbQuery(
-            'DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone = ?',
-            [deviceId, phone]
-        );
+        const checkPhones = [phone];
+        const norm = normalizePhoneFromJid(phone);
+        if (norm && !checkPhones.includes(norm)) checkPhones.push(norm);
+        const raw = getRawPhoneFromJid(phone);
+        if (raw && !checkPhones.includes(raw)) checkPhones.push(raw);
 
-        // Jika rawJid diberikan, pastikan bentuk normalisasinya juga dibersihkan
-        if (rawJid) {
-            const altPhone = normalizePhoneFromJid(rawJid);
-            if (altPhone && altPhone !== phone) {
-                await dbQuery('DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone = ?', [deviceId, altPhone]).catch(() => { });
-            }
+        if (lidToPhoneMap.has(phone)) {
+            const mappedPn = lidToPhoneMap.get(phone);
+            if (mappedPn && !checkPhones.includes(mappedPn)) checkPhones.push(mappedPn);
         }
+        if (phoneToLidMap.has(phone)) {
+            const mappedLid = phoneToLidMap.get(phone);
+            if (mappedLid && !checkPhones.includes(mappedLid)) checkPhones.push(mappedLid);
+        }
+
+        if (rawJid) {
+            const altRaw = getRawPhoneFromJid(rawJid);
+            if (altRaw && !checkPhones.includes(altRaw)) checkPhones.push(altRaw);
+            const altNorm = normalizePhoneFromJid(rawJid);
+            if (altNorm && !checkPhones.includes(altNorm)) checkPhones.push(altNorm);
+        }
+
+        // 1. Hapus langsung berdasarkan semua alias phone / LID
+        const placeholders = checkPhones.map(() => '?').join(',');
+        await dbQuery(
+            `DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone IN (${placeholders})`,
+            [deviceId, ...checkPhones]
+        );
 
         // 2. Bersihkan juga nomor/LID terkait dari histori percakapan (antisipasi mapping LID vs Phone)
         const related = await dbQuery(
@@ -586,13 +650,13 @@ async function unmuteContact(deviceId, phone, rawJid = null) {
 
         if (Array.isArray(related)) {
             for (const r of related) {
-                if (r.num && r.num.length >= 5 && r.num !== phone) {
+                if (r.num && r.num.length >= 5 && !checkPhones.includes(r.num)) {
                     await dbQuery('DELETE FROM ai_muted_contacts WHERE device_id = ? AND phone = ?', [deviceId, r.num]).catch(() => { });
                 }
             }
         }
 
-        console.log(`[AI UNMUTE] Kontak/Grup ${phone} (dan alias terkait) berhasil di-unmute (Device ${deviceId})`);
+        console.log(`[AI UNMUTE] Kontak/Grup ${phone} (alias: ${checkPhones.join(', ')}) berhasil di-unmute (Device ${deviceId})`);
     } catch (e) {
         console.error('[AI UNMUTE] Error unmuting contact:', e.message);
     }
@@ -783,6 +847,131 @@ async function cleanupExpiredMutedContacts() {
 }
 
 /**
+ * Deteksi apakah pesan berasal dari Iklan META (Click-to-WhatsApp Ads / CTWA)
+ * Meneliti metadata contextInfo, externalAdReply, entryPointConversion, dan ctwaPayload
+ */
+function isMetaAdMessage(msg) {
+    if (!msg || !msg.message) return false;
+
+    let m = msg.message;
+    // Unwrap wrappers jika ada
+    while (m) {
+        if (m.ephemeralMessage?.message) m = m.ephemeralMessage.message;
+        else if (m.viewOnceMessage?.message) m = m.viewOnceMessage.message;
+        else if (m.viewOnceMessageV2?.message) m = m.viewOnceMessageV2.message;
+        else if (m.documentWithCaptionMessage?.message) m = m.documentWithCaptionMessage.message;
+        else if (m.editedMessage?.message?.protocolMessage?.editedMessage) m = m.editedMessage.message.protocolMessage.editedMessage;
+        else break;
+    }
+
+    const contextInfo = m.extendedTextMessage?.contextInfo
+        || m.imageMessage?.contextInfo
+        || m.videoMessage?.contextInfo
+        || m.interactiveMessage?.contextInfo
+        || m.interactiveResponseMessage?.contextInfo
+        || m.templateMessage?.contextInfo
+        || m.buttonsResponseMessage?.contextInfo
+        || m.contextInfo
+        || null;
+
+    if (contextInfo) {
+        // 1. externalAdReply (preview/kartu iklan Facebook / Instagram)
+        if (contextInfo.externalAdReply) {
+            return true;
+        }
+        // 2. entryPointConversionApp / Source (ctwa facebook/instagram)
+        if (contextInfo.entryPointConversionApp || contextInfo.entryPointConversionSource) {
+            return true;
+        }
+        // 3. Payload konversi iklan Meta
+        if (contextInfo.ctwaPayload || contextInfo.conversionData) {
+            return true;
+        }
+    }
+
+    // 4. Cek interactiveMessage nativeFlow dari CTA iklan
+    if (m.interactiveMessage?.header?.hasMediaAttachment && m.interactiveMessage?.nativeFlowMessage) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Ekstraksi teks pesan masuk secara menyeluruh dari segala jenis pesan WhatsApp & Baileys
+ * Mendukung teks biasa, media caption, interactive buttons, quick reply, template, dan iklan CTWA
+ */
+function extractIncomingText(msg) {
+    if (!msg || !msg.message) return '';
+
+    let m = msg.message;
+
+    // Unwrap wrappers recursively
+    while (m) {
+        if (m.ephemeralMessage?.message) {
+            m = m.ephemeralMessage.message;
+        } else if (m.viewOnceMessage?.message) {
+            m = m.viewOnceMessage.message;
+        } else if (m.viewOnceMessageV2?.message) {
+            m = m.viewOnceMessageV2.message;
+        } else if (m.documentWithCaptionMessage?.message) {
+            m = m.documentWithCaptionMessage.message;
+        } else if (m.editedMessage?.message?.protocolMessage?.editedMessage) {
+            m = m.editedMessage.message.protocolMessage.editedMessage;
+        } else {
+            break;
+        }
+    }
+
+    // 1. Teks langsung
+    if (m.conversation) return m.conversation.trim();
+    if (m.extendedTextMessage?.text) return m.extendedTextMessage.text.trim();
+
+    // 2. Tombol dan template balasan
+    if (m.buttonsResponseMessage?.selectedDisplayText) return m.buttonsResponseMessage.selectedDisplayText.trim();
+    if (m.buttonsResponseMessage?.selectedButtonId) return m.buttonsResponseMessage.selectedButtonId.trim();
+    if (m.templateButtonReplyMessage?.selectedDisplayText) return m.templateButtonReplyMessage.selectedDisplayText.trim();
+    if (m.templateButtonReplyMessage?.selectedId) return m.templateButtonReplyMessage.selectedId.trim();
+    if (m.listResponseMessage?.title) return m.listResponseMessage.title.trim();
+    if (m.listResponseMessage?.singleSelectReply?.selectedRowId) return m.listResponseMessage.singleSelectReply.selectedRowId.trim();
+
+    // 3. Interactive Response (Native Flow / Quick Reply buttons dari Iklan Meta)
+    if (m.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+        try {
+            const btnJson = JSON.parse(m.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+            const res = btnJson.display_text || btnJson.id || btnJson.title || '';
+            if (res) return String(res).trim();
+        } catch (_) {
+            return String(m.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson).trim();
+        }
+    }
+
+    // 4. Interactive Message (WhatsApp Business / CTWA ad body text)
+    if (m.interactiveMessage?.body?.text) return m.interactiveMessage.body.text.trim();
+    if (m.interactiveMessage?.header?.title) return m.interactiveMessage.header.title.trim();
+
+    // 5. Caption media
+    if (m.imageMessage?.caption) return m.imageMessage.caption.trim();
+    if (m.videoMessage?.caption) return m.videoMessage.caption.trim();
+    if (m.documentMessage?.caption) return m.documentMessage.caption.trim();
+
+    // 6. Fallback: Context externalAdReply title/body jika tidak ada teks lain dari pelanggan
+    const contextInfo = m.extendedTextMessage?.contextInfo
+        || m.imageMessage?.contextInfo
+        || m.interactiveMessage?.contextInfo
+        || m.contextInfo;
+
+    if (contextInfo?.externalAdReply) {
+        const ad = contextInfo.externalAdReply;
+        if (ad.title && ad.body) return `${ad.title} - ${ad.body}`.trim();
+        if (ad.title) return ad.title.trim();
+        if (ad.body) return ad.body.trim();
+    }
+
+    return '';
+}
+
+/**
  * Deteksi pemicu Chat Admin dari teks pesan masuk
  * HANYA aktif jika pelanggan benar-benar meminta bantuan admin/manusia secara eksplisit.
  * Pertanyaan biasa seperti "Halo admin, alamat di mana?" atau "mau tanya admin..." TIDAK akan memicu mute.
@@ -792,12 +981,29 @@ function isChatAdminTrigger(text) {
     const clean = text.trim().toLowerCase().replace(/[^\w\s#]/g, ' ');
     const normalized = clean.replace(/\s+/g, ' ').trim();
 
+    // ── CEK KATA PERTANYAAN / INQUIRY ───────────────────────────────────────
+    // Jika pesan mengandung pertanyaan seputar info toko, produk, harga, promo, atau lokasi,
+    // JANGAN PERNAH MUTE! Biarkan Bot AI menjawab pertanyaan pelanggan tersebut.
+    const inquiryKeywords = [
+        'dimana', 'di mana', 'lokasi', 'alamat', 'cabang', 'toko',
+        'harga', 'berapa', 'biaya', 'ongkir', 'tarif', 'price',
+        'promo', 'diskon', 'discount', 'voucher', 'potongan', 'gratis', 'free',
+        'jam buka', 'buka jam', 'tutup jam', 'operasional', 'jadwal',
+        'kacamata', 'frame', 'lensa', 'minus', 'plus', 'silinder', 'cylinder',
+        'periksa', 'cek mata', 'resep', 'optik', 'garansi', 'model', 'katalog',
+        'bisa', 'apakah', 'ada', 'ready', 'stok', 'stock'
+    ];
+    const hasInquiry = inquiryKeywords.some(kw => normalized.includes(kw));
+    if (hasInquiry) {
+        return false; // Pelanggan sedang bertanya info, BUKAN meminta staf admin manual!
+    }
+
     // 1. Kata kunci langsung / frasa pendek admin
     if (normalized === 'admin' || normalized === 'cs' || normalized === 'operator') return true;
     if (normalized === '#admin' || normalized === '!admin' || normalized === 'chat_admin') return true;
 
     // 2. Frasa spesifik chat admin
-    if (normalized.includes('chat admin') || normalized.includes('chatt admin') || normalized.includes('hubungi admin')) return true;
+    if (normalized === 'chat admin' || normalized === 'chatt admin' || normalized === 'hubungi admin') return true;
     if (normalized.includes('bantuan admin') || normalized.includes('kontak admin')) return true;
     if (normalized.includes('bicara dengan admin') || normalized.includes('bicara admin') || normalized.includes('ngomong sama admin') || normalized.includes('bicara sama admin')) return true;
     if (normalized.includes('sambungkan ke admin') || normalized.includes('sambungkan admin') || normalized.includes('alih kan ke admin') || normalized.includes('panggil admin')) return true;
@@ -808,7 +1014,12 @@ function isChatAdminTrigger(text) {
     }
 
     // 4. Pola kombinasi tindakan meminta terhubung dengan staf/manusia (BUKAN sekadar bertanya "mau tanya admin...", "tanya staff...")
-    if (/\b(minta|tolong|mau|bisa|mohon)\s+(chat|chatt|hubungi|kontak|bicara|ngobrol|ngomong|sambungkan|dialihkan|alih)\b.*\b(admin|staf|staff|cs|operator|customer service|manusia|human)\b/i.test(normalized)) {
+    if (/\b(minta|tolong|mau|bisa|mohon)\s+(chat|chatt|hubungi|kontak|bicara|ngobrol|ngomong|sambungkan|dialihkan|alih)\b.*\b(admin|staf|staff|cs|operator|customer service|manusia|human|orang asli)\b/i.test(normalized)) {
+        return true;
+    }
+
+    // 5. Pola eksplisit menolak bot
+    if (/\b(manusia|orang asli|bukan bot|bukan ai|jangan bot|stop bot)\b/i.test(normalized)) {
         return true;
     }
 
@@ -959,9 +1170,25 @@ async function isContactMuted(deviceId, phone, rawJid = null) {
     if (!deviceId || !phone) return false;
     try {
         const checkPhones = [phone];
+        const norm = normalizePhoneFromJid(phone);
+        if (norm && !checkPhones.includes(norm)) checkPhones.push(norm);
+        const raw = getRawPhoneFromJid(phone);
+        if (raw && !checkPhones.includes(raw)) checkPhones.push(raw);
+
+        if (lidToPhoneMap.has(phone)) {
+            const mappedPn = lidToPhoneMap.get(phone);
+            if (mappedPn && !checkPhones.includes(mappedPn)) checkPhones.push(mappedPn);
+        }
+        if (phoneToLidMap.has(phone)) {
+            const mappedLid = phoneToLidMap.get(phone);
+            if (mappedLid && !checkPhones.includes(mappedLid)) checkPhones.push(mappedLid);
+        }
+
         if (rawJid) {
-            const alt = normalizePhoneFromJid(rawJid);
-            if (alt && !checkPhones.includes(alt)) checkPhones.push(alt);
+            const altRaw = getRawPhoneFromJid(rawJid);
+            if (altRaw && !checkPhones.includes(altRaw)) checkPhones.push(altRaw);
+            const altNorm = normalizePhoneFromJid(rawJid);
+            if (altNorm && !checkPhones.includes(altNorm)) checkPhones.push(altNorm);
         }
 
         const placeholders = checkPhones.map(() => '?').join(',');
@@ -1113,6 +1340,14 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
         const targetReply = aiConfig ? (aiConfig.target_reply || 'both') : 'both';
         const isGroup = senderJid.endsWith('@g.us');
 
+        // ── DETEKSI PESAN DARI IKLAN META (Facebook / Instagram Ads - CTWA) ───
+        const isFromMetaAd = isMetaAdMessage(fullMsg);
+        if (isFromMetaAd) {
+            console.log(`[META ADS LEAD] Kontak ${remotePhone} (${senderJid}) terdeteksi datang dari Iklan META. Memastikan Bot AI langsung merespons.`);
+            // Jika kontak sebelumnya pernah di-mute (misal karena salah deteksi sesi lama), otomatis unmute sekarang!
+            await unmuteContact(deviceId, remotePhone, senderJid);
+        }
+
         // ── FITUR AI (UNMUTE, CHAT ADMIN, DAN MUTE) HANYA BERJALAN JIKA AI AKTIF ──
         if (isAiEnabled) {
             // 1. FITUR UNMUTE / REAKTIVASI AI (Pribadi maupun Grup)
@@ -1151,39 +1386,46 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
             }
 
             // 2. FITUR CHAT ADMIN & HANDOFF (Pribadi maupun Grup)
-            if (isChatAdminTrigger(incomingText)) {
-                console.log(`[CHAT ADMIN] Kontak/Grup ${remotePhone} memicu Chat Admin. Me-mute Bot AI.`);
-                await muteContact(deviceId, remotePhone, 'chat_admin');
+            // PENTING: Jika pesan datang dari Iklan META (CTWA), JANGAN mute karena tombol ad CTA Meta sering berjudul "Chat Admin"!
+            // Kecuali jika pelanggan secara eksplisit mengetik meminta manusia/orang asli ("bukan bot", "orang asli", "manusia").
+            const explicitHumanDemand = /\b(manusia|orang asli|bukan bot|bukan ai|jangan bot|stop bot)\b/i.test(incomingText);
 
-                // Gunakan template kustom handoff dari device_ai_settings jika ada
-                const handoffText = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
-                    ? aiConfig.ai_handoff_text.trim()
-                    : `Baik, permintaan Anda telah kami teruskan ke *Admin / Staf kami* 👤\n\nAdmin kami akan segera membaca dan merespons chat Anda secara langsung. Sementara ini, Bot AI dinonaktifkan untuk percakapan ini dan akan aktif kembali besok hari.\n\nTerima kasih atas kesabaran Anda! 🙏`;
+            if (!isFromMetaAd || explicitHumanDemand) {
+                if (isChatAdminTrigger(incomingText)) {
+                    console.log(`[CHAT ADMIN] Kontak/Grup ${remotePhone} memicu Chat Admin. Me-mute Bot AI.`);
+                    await muteContact(deviceId, remotePhone, 'chat_admin');
 
-                // Tampilkan simulasi mengetik singkat yang responsif
-                await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
-                await new Promise(r => setTimeout(r, 600));
+                    // Gunakan template kustom handoff dari device_ai_settings jika ada
+                    const handoffText = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
+                        ? aiConfig.ai_handoff_text.trim()
+                        : `Baik, permintaan Anda telah kami teruskan ke *Admin / Staf kami* 👤\n\nAdmin kami akan segera membaca dan merespons chat Anda secara langsung. Sementara ini, Bot AI dinonaktifkan untuk percakapan ini dan akan aktif kembali besok hari.\n\nTerima kasih atas kesabaran Anda! 🙏`;
 
-                try {
-                    let sentMsg = null;
+                    // Tampilkan simulasi mengetik singkat yang responsif
+                    await sock.sendPresenceUpdate('composing', senderJid).catch(() => { });
+                    await new Promise(r => setTimeout(r, 600));
+
                     try {
-                        sentMsg = await sock.sendMessage(senderJid, { text: handoffText }, { quoted: fullMsg });
-                    } catch (quotedErr) {
-                        sentMsg = await sock.sendMessage(senderJid, { text: handoffText });
+                        let sentMsg = null;
+                        try {
+                            sentMsg = await sock.sendMessage(senderJid, { text: handoffText }, { quoted: fullMsg });
+                        } catch (quotedErr) {
+                            sentMsg = await sock.sendMessage(senderJid, { text: handoffText });
+                        }
+                        await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                        const waMsgId = sentMsg?.key?.id || null;
+                        markBotSentMessage(waMsgId);
+                        await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', handoffText, 'out', 'sent');
+                    } catch (err) {
+                        await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                        console.error('[Chat Admin Handoff Send Error]', err.message);
                     }
-                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                    const waMsgId = sentMsg?.key?.id || null;
-                    markBotSentMessage(waMsgId);
-                    await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', handoffText, 'out', 'sent');
-                } catch (err) {
-                    await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
-                    console.error('[Chat Admin Handoff Send Error]', err.message);
+                    return; // Hentikan di sini, jangan jalankan AI atau autoreply
                 }
-                return; // Hentikan di sini, jangan jalankan AI atau autoreply
             }
 
             // 3. CEK STATUS MUTE (Pribadi maupun Grup)
-            if (!skipMuteCheck) {
+            // Lead baru dari Iklan Meta tidak boleh diblokir oleh mute lama agar AI langsung merespons
+            if (!skipMuteCheck && !isFromMetaAd) {
                 const isMuted = await isContactMuted(deviceId, remotePhone, senderJid);
                 if (isMuted) {
                     console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin. Bot AI & autoreply dinonaktifkan.`);
@@ -1406,6 +1648,10 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
 8. FORMAT NOMOR TELEPON/WHATSAPP: Jika memberikan nomor telepon atau kontak WhatsApp, WAJIB tuliskan dalam format tautan/link yang BISA LANGSUNG DIKLIK oleh pelanggan di WhatsApp, yaitu https://wa.me/628xxx (contoh: 'Telp/WA: https://wa.me/6285129868954'). Dilarang memecah angka telepon dengan spasi atau karakter aneh agar link tetap utuh dan bisa langsung diklik.`;
 
             sysPrompt = sysPrompt + "\n" + waFormatRules;
+
+            if (isFromMetaAd) {
+                sysPrompt += `\n[CATATAN PENTING - PELANGGAN DARI IKLAN META (INSTAGRAM/FACEBOOK)]: Pelanggan ini baru saja mengklik iklan promosi kami. Sambut dengan sangat ramah, hangat, dan antusias. Langsung jawab pertanyaannya seputar promo, frame, lensa, atau lokasi cabang toko Winsee Optik terdekat secara jelas dan lengkap agar pelanggan langsung terbantu!`;
+            }
 
             // ── Inject Tanggal & Jam WIB ───────────────────────────────────────
             const wibOffset = 7 * 60; // WIB = UTC+7
@@ -1941,9 +2187,22 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
         for (const msg of messages) {
             if (isJidBroadcast(msg.key.remoteJid || '')) continue; // Abaikan broadcast
 
+            // ── SINKRONISASI PEMETAAN LID DAN PHONE NUMBER (Baileys v7) ──────
+            if (msg.key.remoteJidAlt) {
+                recordLidPhoneMapping(msg.key.remoteJid, msg.key.remoteJidAlt, sock);
+            }
+
             const senderJid = msg.key.remoteJid;
-            // v7 LID: JID bisa berformat "628xxx:12@lid" — gunakan helper normalizePhoneFromJid()
-            const remotePhone = normalizePhoneFromJid(senderJid);
+            let remotePhone = normalizePhoneFromJid(senderJid);
+
+            // Jika senderJid adalah LID tapi nomor telepon aslinya ada di remoteJidAlt atau cache
+            if (senderJid.endsWith('@lid') || (remotePhone.length >= 14 && !remotePhone.startsWith('62'))) {
+                const mappedPhone = lidToPhoneMap.get(remotePhone) || (msg.key.remoteJidAlt ? normalizePhoneFromJid(msg.key.remoteJidAlt) : null);
+                if (mappedPhone && mappedPhone.length >= 9 && mappedPhone.length <= 14) {
+                    remotePhone = mappedPhone;
+                }
+            }
+
             let myPhone = sessions[sessionId]?.phone;
 
             if (!myPhone) {
@@ -1955,56 +2214,25 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             }
             if (!myPhone) continue; // Jangan proses jika nomor device belum terbaca
 
-            let incomingText = msg.message?.conversation
-                || msg.message?.extendedTextMessage?.text
-                || msg.message?.buttonsResponseMessage?.selectedDisplayText
-                || msg.message?.buttonsResponseMessage?.selectedButtonId
-                || msg.message?.templateButtonReplyMessage?.selectedDisplayText
-                || msg.message?.templateButtonReplyMessage?.selectedId
-                || '';
-
-            // Handle klik tombol interaktif (nativeFlowMessage quick_reply)
-            if (!incomingText && msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
-                try {
-                    const btnJson = JSON.parse(msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
-                    incomingText = btnJson.id || btnJson.display_text || '';
-                } catch (_) {
-                    incomingText = msg.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson;
-                }
-            }
-
-            // Ekstraksi pesan pesan ephemeral, view once, atau edited message
-            if (!incomingText && msg.message?.ephemeralMessage?.message) {
-                const em = msg.message.ephemeralMessage.message;
-                incomingText = em.conversation || em.extendedTextMessage?.text || '';
-            }
-            if (!incomingText && msg.message?.viewOnceMessage?.message) {
-                const vom = msg.message.viewOnceMessage.message;
-                incomingText = vom.conversation || vom.extendedTextMessage?.text || '';
-            }
-            if (!incomingText && msg.message?.viewOnceMessageV2?.message) {
-                const vom2 = msg.message.viewOnceMessageV2.message;
-                incomingText = vom2.conversation || vom2.extendedTextMessage?.text || '';
-            }
-            if (!incomingText && msg.message?.editedMessage?.message?.protocolMessage?.editedMessage) {
-                const edm = msg.message.editedMessage.message.protocolMessage.editedMessage;
-                incomingText = edm.conversation || edm.extendedTextMessage?.text || '';
-            }
-            // Ekstraksi caption dari media gambar, video, atau dokumen
-            if (!incomingText) {
-                incomingText = msg.message?.imageMessage?.caption
-                    || msg.message?.videoMessage?.caption
-                    || msg.message?.documentMessage?.caption
-                    || '';
-            }
+            // Ekstraksi teks pesan masuk secara komprehensif (mendukung interactive message, CTA buttons, dan CTWA ad fallbacks)
+            let incomingText = extractIncomingText(msg);
 
             const waMsgId = msg.key.id;
             const isFromMe = msg.key.fromMe;
 
+            // ── CEK STUB / PLACEHOLDER PESAN BELUM TERDEKRIPSI ───────────────
+            // Baileys terkadang menerima stub sementara (CIPHERTEXT/PDO resend).
+            // PENTING: JANGAN catat stub kosong ke anti-duplikasi cache!
+            // Jika dicatat sekarang, saat pesan aslinya didekripsi beberapa detik kemudian,
+            // pesan asli tersebut akan terblokir sebagai duplikat!
+            const isStubPlaceholder = !!msg.messageStubType || !msg.message || Object.keys(msg.message).length === 0;
+            if (isStubPlaceholder && !incomingText) {
+                continue; // Lewati stub, tunggu stanza dekripsi pesan asli tiba
+            }
+
             // ── ANTI-DUPLIKASI PESAN MASUK ───────────────────────────────────
-            // Baileys v7 sering memancarkan 'notify' disusul 'append' atau retry stanza
-            // untuk pesan yang sama. Jika pesan dari kontak sudah pernah diterima, lewati.
-            if (!isFromMe && waMsgId) {
+            // Hanya periksa deduplikasi jika pesan sudah memiliki teks nyata dan bukan pesan keluar
+            if (!isFromMe && waMsgId && incomingText) {
                 if (isDuplicateIncomingMessage(waMsgId)) {
                     console.log(`[DEDUPLICATE] Mengabaikan pesan masuk duplikat (ID: ${waMsgId}) dari ${senderJid}`);
                     continue;
@@ -2018,10 +2246,11 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
             const status = isFromMe ? 'sent' : 'delivered';
 
             // ── FILTER PESAN SINKRONISASI / HISTORI LAMA ─────────────────────
-            // Jika pesan berumur > 120 detik (misal sinkronisasi riwayat chat saat reconnect),
+            // Jika pesan berumur > 600 detik (10 menit) (misal sinkronisasi riwayat chat saat reconnect),
             // arsipkan ke database tapi JANGAN memicu aksi live (mute admin atau balasan otomatis).
+            // Ambang batas 600 detik mencegah pesan iklan tertunda/lag terbuang sia-sia.
             const msgTimestampSec = Number(msg.messageTimestamp || 0);
-            const isOldMessage = msgTimestampSec > 0 && ((Date.now() / 1000) - msgTimestampSec > 120);
+            const isOldMessage = msgTimestampSec > 0 && ((Date.now() / 1000) - msgTimestampSec > 600);
 
             if (isOldMessage) {
                 if (incomingText) {
