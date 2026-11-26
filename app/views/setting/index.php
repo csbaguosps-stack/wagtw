@@ -329,6 +329,7 @@ $profile = $data['profile'];
 
 <script>
 function switchTab(tab) {
+    try { localStorage.setItem('wagtw_setting_tab', tab); } catch(e) {}
     const tabs = ['profile', 'users', 'branding'];
     tabs.forEach(t => {
         const btn = document.getElementById('tab-btn-' + t);
@@ -345,15 +346,22 @@ function switchTab(tab) {
     });
 }
 
+// Restore saved tab on load
+try {
+    const savedSettingTab = localStorage.getItem('wagtw_setting_tab');
+    if (savedSettingTab && ['profile', 'users', 'branding'].includes(savedSettingTab)) {
+        switchTab(savedSettingTab);
+    }
+} catch(e) {}
 
-document.getElementById('form-profile').addEventListener('submit', function(e) {
+$(document).off('submit', '#form-profile').on('submit', '#form-profile', function(e) {
     e.preventDefault();
     const fd = new FormData(this);
     fetch(BASEURL + '/setting/updateProfile', { method: 'POST', body: fd })
         .then(r => r.json()).then(res => {
             if (res.status === 'success') {
-                Swal.fire({ icon: 'success', title: 'Berhasil', text: res.message, timer: 1500, showConfirmButton: false });
-                setTimeout(() => window.reloadCurrentPage(), 1500);
+                Swal.fire({ icon: 'success', title: 'Berhasil', text: res.message, timer: 1200, showConfirmButton: false });
+                setTimeout(() => window.reloadCurrentPage(), 1200);
             } else Swal.fire({ icon: 'error', title: 'Gagal', text: res.message });
         });
 });
@@ -451,7 +459,7 @@ function editUser(u) {
     document.getElementById('modal-user').classList.remove('hidden');
 }
 
-document.getElementById('form-user').addEventListener('submit', function(e) {
+$(document).off('submit', '#form-user').on('submit', '#form-user', function(e) {
     e.preventDefault();
     const fd = new FormData(this);
     
@@ -466,8 +474,9 @@ document.getElementById('form-user').addEventListener('submit', function(e) {
     fetch(BASEURL + url, { method: 'POST', body: fd })
         .then(r => r.json()).then(res => {
             if (res.status === 'success') {
-                Swal.fire({ icon: 'success', title: 'Berhasil', text: res.message, timer: 1500, showConfirmButton: false });
-                setTimeout(() => window.reloadCurrentPage(), 1500);
+                closeModal('modal-user');
+                Swal.fire({ icon: 'success', title: 'Berhasil', text: res.message, timer: 1200, showConfirmButton: false });
+                setTimeout(() => window.reloadCurrentPage(), 1200);
             } else Swal.fire({ icon: 'error', title: 'Gagal', text: res.message });
         });
 });
@@ -550,30 +559,27 @@ function uploadLogoFile(input) {
     });
 }
 
-var formBranding = document.getElementById('form-branding');
-if (formBranding) {
-    formBranding.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const fd = new FormData(this);
+$(document).off('submit', '#form-branding').on('submit', '#form-branding', function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
 
-        fetch(BASEURL + '/setting/updateBranding', {
-            method: 'POST',
-            body: fd
-        })
-        .then(r => r.json())
-        .then(res => {
-            if (res.status === 'success') {
-                Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1500, showConfirmButton: false });
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
-            }
-        })
-        .catch(() => {
-            Swal.fire({ icon: 'error', title: 'Error!', text: 'Terjadi kesalahan jaringan.' });
-        });
+    fetch(BASEURL + '/setting/updateBranding', {
+        method: 'POST',
+        body: fd
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.status === 'success') {
+            Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1200, showConfirmButton: false });
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+        }
+    })
+    .catch(() => {
+        Swal.fire({ icon: 'error', title: 'Error!', text: 'Terjadi kesalahan jaringan.' });
     });
-}
+});
 <?php endif; ?>
 </script>
 

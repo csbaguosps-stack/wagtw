@@ -107,7 +107,7 @@ if ($dbModels) {
                                 <?= htmlspecialchars($dev['phone'] ? '+' . preg_replace('/^\+/', '', $dev['phone']) : 'Belum Ditautkan') ?>
                             </span>
                             <div class="flex items-center gap-1.5 text-xs text-gray-500">
-                                <span class="font-medium text-gray-700"><?= htmlspecialchars($dev['name']) ?></span>
+                                <span class="font-medium text-gray-700 dev-name-text"><?= htmlspecialchars($dev['name']) ?></span>
                                 <span class="text-[10px] text-gray-400 px-1.5 py-0.2 bg-gray-100 rounded-md">
                                     By: <?= htmlspecialchars($dev['creator_username'] ?? 'User') ?>
                                 </span>
@@ -187,7 +187,8 @@ if ($dbModels) {
 
                         <!-- AI Setting -->
                         <?php $isAiOn = (!empty($dev['ai_enabled']) && $dev['ai_enabled'] == 1); ?>
-                        <button onclick="openAiModal(<?= $dev['id'] ?>, '<?= htmlspecialchars($dev['name'], ENT_QUOTES) ?>')"
+                        <button id="btn-ai-device-<?= $dev['id'] ?>"
+                                onclick="openAiModal(<?= $dev['id'] ?>, '<?= htmlspecialchars($dev['name'], ENT_QUOTES) ?>')"
                                 title="Pengaturan AI Auto-Reply (Status: <?= $isAiOn ? 'Aktif' : 'Nonaktif' ?>)"
                                 class="inline-flex items-center gap-1.5 <?= $isAiOn ? 'bg-purple-100 hover:bg-purple-200 text-purple-800 border-purple-300 ring-1 ring-purple-300' : 'bg-gray-50 hover:bg-gray-100 text-gray-500 border-gray-200' ?> border text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95 shadow-sm">
                             <svg class="w-3.5 h-3.5 <?= $isAiOn ? 'text-purple-600' : 'text-gray-400' ?>" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
@@ -856,7 +857,11 @@ if ($dbModels) {
     window.closeModal = id => $('#' + id).removeClass('flex').addClass('hidden');
 
     function reloadPage() {
-        window.location.reload();
+        if (typeof window.reloadCurrentPage === 'function') {
+            window.reloadCurrentPage();
+        } else {
+            window.location.reload();
+        }
     }
 
     // ── Add Device ────────────────────────────────────────────────────────
@@ -890,13 +895,15 @@ if ($dbModels) {
 
     $('#formEditDevice').on('submit', function (e) {
         e.preventDefault();
+        const devId = $('#editDeviceId').val();
+        const newName = $('#editDeviceName').val();
         $.ajax({
             url: BASEURL + '/device/editDevice', type: 'POST', data: $(this).serialize(), dataType: 'json',
             success(res) {
                 if (res.status === 'success') {
                     closeModal('editDeviceModal');
-                    Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1500, showConfirmButton: false })
-                        .then(() => reloadPage());
+                    $(`#dev-row-${devId} .dev-name-text`).text(newName);
+                    Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1200, showConfirmButton: false });
                 } else { Swal.fire('Gagal', res.message, 'error'); }
             }
         });
@@ -912,8 +919,12 @@ if ($dbModels) {
             $.ajax({
                 url: BASEURL + '/device/delete', type: 'POST', data: { id }, dataType: 'json',
                 success(res) {
-                    Swal.fire({ icon: res.status === 'success' ? 'success' : 'error', title: res.message, timer: 1500, showConfirmButton: false })
-                        .then(() => reloadPage());
+                    if (res.status === 'success') {
+                        $(`#dev-row-${id}`).fadeOut(300, function() { $(this).remove(); });
+                        Swal.fire({ icon: 'success', title: res.message, timer: 1200, showConfirmButton: false });
+                    } else {
+                        Swal.fire('Gagal', res.message, 'error');
+                    }
                 }
             });
         });
@@ -1206,14 +1217,29 @@ if ($dbModels) {
     $('#formAiSettings').on('submit', function (e) {
         e.preventDefault();
         const fd = new FormData(this);
-        if (!$('#aiEnabled').is(':checked')) fd.delete('ai_enabled');
+        const devId = $('#aiDeviceId').val();
+        const isAiOn = $('#aiEnabled').is(':checked');
+        if (!isAiOn) fd.delete('ai_enabled');
         fetch(BASEURL + '/device/aiSettings', { method: 'POST', body: fd })
             .then(r => r.json())
             .then(res => {
                 if (res.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Tersimpan!', text: res.message, timer: 1200, showConfirmButton: false });
                     closeModal('aiModal');
-                    setTimeout(() => location.reload(), 1200);
+                    const aiBtn = $(`#btn-ai-device-${devId}`);
+                    if (aiBtn.length) {
+                        if (isAiOn) {
+                            aiBtn.removeClass('bg-gray-50 hover:bg-gray-100 text-gray-500 border-gray-200')
+                                 .addClass('bg-purple-100 hover:bg-purple-200 text-purple-800 border-purple-300 ring-1 ring-purple-300');
+                            aiBtn.find('svg').removeClass('text-gray-400').addClass('text-purple-600');
+                            aiBtn.find('span.text-\\[10px\\]').removeClass('bg-gray-200 text-gray-600').addClass('bg-emerald-100 text-emerald-700').text('ON');
+                        } else {
+                            aiBtn.removeClass('bg-purple-100 hover:bg-purple-200 text-purple-800 border-purple-300 ring-1 ring-purple-300')
+                                 .addClass('bg-gray-50 hover:bg-gray-100 text-gray-500 border-gray-200');
+                            aiBtn.find('svg').removeClass('text-purple-600').addClass('text-gray-400');
+                            aiBtn.find('span.text-\\[10px\\]').removeClass('bg-emerald-100 text-emerald-700').addClass('bg-gray-200 text-gray-600').text('OFF');
+                        }
+                    }
+                    Swal.fire({ icon: 'success', title: 'Tersimpan!', text: res.message, timer: 1200, showConfirmButton: false });
                 } else { Swal.fire('Gagal', res.message, 'error'); }
             });
     });

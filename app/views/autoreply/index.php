@@ -408,14 +408,8 @@
                     url: BASEURL + '/autoreply/delete', type: 'POST', data: { id: id }, dataType: 'json',
                     success: function(res) {
                         if(res.status == 'success') {
-                            $('#ar-card-' + id).fadeOut(300);
-                            Swal.fire({ icon: 'success', title: 'Terhapus!', text: res.message, timer: 1000, showConfirmButton: false }).then(()=>{
-                                if (typeof window.loadPage === 'function') {
-                                    window.loadPage(BASEURL + '/autoreply', false);
-                                } else {
-                                    location.reload();
-                                }
-                            });
+                            $('#ar-card-' + id).fadeOut(300, function() { $(this).remove(); });
+                            Swal.fire({ icon: 'success', title: 'Terhapus!', text: res.message, timer: 1000, showConfirmButton: false });
                         } else {
                             $('#ar-card-' + id).css({ opacity: 1, pointerEvents: 'auto' });
                             Swal.fire('Gagal!', res.message, 'error');
@@ -432,6 +426,7 @@
 
     // --- Business Settings Logic ---
     function switchTab(tabId) {
+        try { localStorage.setItem('wagtw_autoreply_tab', tabId); } catch(e) {}
         if(tabId === 'keywords') {
             $('#tab-keywords').removeClass('hidden');
             $('#tab-business').addClass('hidden');
@@ -448,6 +443,13 @@
             $('#btn-tab-keywords').removeClass('bg-white text-gray-800 font-bold shadow-sm').addClass('text-gray-500 hover:text-gray-700');
         }
     }
+
+    try {
+        const savedARtab = localStorage.getItem('wagtw_autoreply_tab');
+        if (savedARtab && ['keywords', 'business'].includes(savedARtab)) {
+            switchTab(savedARtab);
+        }
+    } catch(e) {}
 
     // Setup day toggles
     $('.day-toggle').on('change', function() {

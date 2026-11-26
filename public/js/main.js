@@ -80,18 +80,28 @@ $(document).ready(function() {
         $.ajax({
             url: url,
             type: 'GET',
-            data: { ajax: true },
+            data: { ajax: true, _t: Date.now() },
             cache: false,
             success: function(response) {
                 hideProgress();
                 $('#ajaxContentProvider').html(response).scrollTop(0);
                 
+                // Immediately force complete Tailwind style re-compilation for newly loaded view
+                if (typeof window.refreshTailwind === 'function') {
+                    window.refreshTailwind();
+                } else if (window.tailwind && typeof window.tailwind.refresh === 'function') {
+                    window.tailwind.refresh();
+                }
+
                 if(pushState) {
                     window.history.pushState({path: url}, '', url);
                 }
 
                 // Auto update Sidebar Active State & Page Title
                 updateSidebarActive(url);
+
+                // Dispatch global lifecycle event
+                window.dispatchEvent(new CustomEvent('wagtw:page_loaded', { detail: { url: url } }));
             },
             error: function() {
                 hideProgress();

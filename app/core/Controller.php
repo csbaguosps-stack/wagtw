@@ -9,6 +9,12 @@
 class Controller {
     public function view($view, $data = [])
     {
+        // Prevent aggressive browser/proxy caching for dynamic views and AJAX fragments
+        if (!headers_sent()) {
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+        }
+
         // Auto-inject global app branding (logo & app name)
         if (!isset($data['app_logo']) || !isset($data['app_name'])) {
             try {

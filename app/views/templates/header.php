@@ -9,8 +9,12 @@
     <link rel="icon" href="<?= BASEURL ?>/uploads/branding/<?= $data['app_logo'] ?>">
     <link rel="apple-touch-icon" href="<?= BASEURL ?>/uploads/branding/<?= $data['app_logo'] ?>">
     <?php endif; ?>
-    <!-- Tailwind CSS (Local Offline) -->
-    <script src="<?= BASEURL ?>/js/tailwindcss.js"></script>
+    <!-- Tailwind CSS (Local Offline with Cache Buster) -->
+    <?php
+        $twFile = dirname(__DIR__, 3) . '/public/js/tailwindcss.js';
+        $twVer = file_exists($twFile) ? filemtime($twFile) : time();
+    ?>
+    <script src="<?= BASEURL ?>/js/tailwindcss.js?v=<?= $twVer ?>"></script>
 
     <!-- Core Libraries: jQuery, SheetJS, DataTables & SweetAlert2 (Loaded early for view scripts) -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>

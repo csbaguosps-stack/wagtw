@@ -805,26 +805,23 @@ function openEditModal(id) {
         });
 }
 
-const formKey = document.getElementById('form-key');
-if (formKey) {
-    formKey.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const fd = new FormData(this);
-        const url = fd.get('id') ? '/aiserver/edit' : '/aiserver/add';
-        
-        fetch(BASEURL + url, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(res => {
-                if (res.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1500, showConfirmButton: false });
-                    closeModal('modal-key');
-                    setTimeout(() => window.reloadCurrentPage(), 1600);
-                } else {
-                    Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
-                }
-            });
-    });
-}
+$(document).off('submit', '#form-key').on('submit', '#form-key', function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    const url = fd.get('id') ? '/aiserver/edit' : '/aiserver/add';
+    
+    fetch(BASEURL + url, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (res.status === 'success') {
+                Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1200, showConfirmButton: false });
+                closeModal('modal-key');
+                window.reloadCurrentPage();
+            } else {
+                Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
+        });
+});
 
 function deleteServer(id) {
     Swal.fire({
@@ -859,7 +856,23 @@ function toggleActive(id) {
     fetch(BASEURL + '/aiserver/toggleActive', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(res => {
-            if (res.status === 'success') window.reloadCurrentPage();
+            if (res.status === 'success') {
+                const row = document.getElementById('server-row-' + id);
+                if (row) {
+                    const badge = row.querySelector('.flex.items-center.gap-6 > span');
+                    const btn = row.querySelector('button[onclick^="toggleActive"]');
+                    if (res.is_active == 1) {
+                        if (badge) { badge.className = 'bg-green-100 text-green-700 text-xs font-bold px-4 py-1.5 rounded-full'; badge.textContent = 'AKTIF'; }
+                        if (btn) { btn.className = 'p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-xl transition shadow-xs'; btn.title = 'Nonaktifkan'; }
+                    } else {
+                        if (badge) { badge.className = 'bg-gray-100 text-gray-500 text-xs font-bold px-4 py-1.5 rounded-full'; badge.textContent = 'NONAKTIF'; }
+                        if (btn) { btn.className = 'p-2 text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-xl transition shadow-xs'; btn.title = 'Aktifkan'; }
+                    }
+                }
+                Swal.fire({ icon: 'success', title: 'Status diperbarui', timer: 1000, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
         });
 }
 
@@ -936,26 +949,23 @@ function openEditModelModal(id) {
         });
 }
 
-const formModel = document.getElementById('form-model');
-if (formModel) {
-    formModel.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const fd = new FormData(this);
-        const url = fd.get('id') ? '/aiserver/editModel' : '/aiserver/addModel';
-        
-        fetch(BASEURL + url, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(res => {
-                if (res.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1500, showConfirmButton: false });
-                    closeModal('modal-model');
-                    setTimeout(() => window.reloadCurrentPage(), 1600);
-                } else {
-                    Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
-                }
-            });
-    });
-}
+$(document).off('submit', '#form-model').on('submit', '#form-model', function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    const url = fd.get('id') ? '/aiserver/editModel' : '/aiserver/addModel';
+    
+    fetch(BASEURL + url, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (res.status === 'success') {
+                Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1200, showConfirmButton: false });
+                closeModal('modal-model');
+                window.reloadCurrentPage();
+            } else {
+                Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
+        });
+});
 
 function deleteModel(id) {
     Swal.fire({
@@ -981,7 +991,23 @@ function toggleActiveModel(id) {
     fetch(BASEURL + '/aiserver/toggleActiveModel', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(res => {
-            if (res.status === 'success') window.reloadCurrentPage();
+            if (res.status === 'success') {
+                const row = document.getElementById('model-row-' + id);
+                if (row) {
+                    const badge = row.querySelector('.flex.items-center.gap-6 > span');
+                    const btn = row.querySelector('button[onclick^="toggleActiveModel"]');
+                    if (res.is_active == 1) {
+                        if (badge) { badge.className = 'bg-green-100 text-green-700 text-xs font-bold px-4 py-1.5 rounded-full'; badge.textContent = 'AKTIF'; }
+                        if (btn) { btn.className = 'p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-xl transition shadow-xs'; btn.title = 'Nonaktifkan'; }
+                    } else {
+                        if (badge) { badge.className = 'bg-gray-100 text-gray-500 text-xs font-bold px-4 py-1.5 rounded-full'; badge.textContent = 'NONAKTIF'; }
+                        if (btn) { btn.className = 'p-2 text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-xl transition shadow-xs'; btn.title = 'Aktifkan'; }
+                    }
+                }
+                Swal.fire({ icon: 'success', title: 'Status model diperbarui', timer: 1000, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
         });
 }
 
@@ -1014,26 +1040,23 @@ function openEditSearchModal(id) {
         });
 }
 
-const formSearch = document.getElementById('form-search');
-if (formSearch) {
-    formSearch.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const fd = new FormData(this);
-        const url = fd.get('id') ? '/aiserver/editSearch' : '/aiserver/addSearch';
-        
-        fetch(BASEURL + url, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(res => {
-                if (res.status === 'success') {
-                    Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1500, showConfirmButton: false });
-                    closeModal('modal-search');
-                    setTimeout(() => window.reloadCurrentPage(), 1600);
-                } else {
-                    Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
-                }
-            });
-    });
-}
+$(document).off('submit', '#form-search').on('submit', '#form-search', function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    const url = fd.get('id') ? '/aiserver/editSearch' : '/aiserver/addSearch';
+    
+    fetch(BASEURL + url, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (res.status === 'success') {
+                Swal.fire({ icon: 'success', title: 'Berhasil!', text: res.message, timer: 1200, showConfirmButton: false });
+                closeModal('modal-search');
+                window.reloadCurrentPage();
+            } else {
+                Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
+        });
+});
 
 function deleteSearch(id) {
     Swal.fire({
@@ -1059,7 +1082,23 @@ function toggleActiveSearch(id) {
     fetch(BASEURL + '/aiserver/toggleActiveSearch', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(res => {
-            if (res.status === 'success') window.reloadCurrentPage();
+            if (res.status === 'success') {
+                const row = document.getElementById('search-row-' + id);
+                if (row) {
+                    const badge = row.querySelector('.flex.items-center.gap-6 > span');
+                    const btn = row.querySelector('button[onclick^="toggleActiveSearch"]');
+                    if (res.is_active == 1) {
+                        if (badge) { badge.className = 'bg-green-100 text-green-700 text-xs font-bold px-4 py-1.5 rounded-full'; badge.textContent = 'AKTIF'; }
+                        if (btn) { btn.className = 'p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-xl transition shadow-xs'; btn.title = 'Nonaktifkan'; }
+                    } else {
+                        if (badge) { badge.className = 'bg-gray-100 text-gray-500 text-xs font-bold px-4 py-1.5 rounded-full'; badge.textContent = 'NONAKTIF'; }
+                        if (btn) { btn.className = 'p-2 text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-xl transition shadow-xs'; btn.title = 'Aktifkan'; }
+                    }
+                }
+                Swal.fire({ icon: 'success', title: 'Status search diperbarui', timer: 1000, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
         });
 }
 
@@ -1159,6 +1198,7 @@ function deleteActivation(deviceId, deviceName) {
 }
 
 function switchTab(tab) {
+    try { localStorage.setItem('wagtw_aiserver_tab', tab); } catch(e) {}
     const tabs = ['server', 'model', 'search', 'monitoring', 'history'];
     
     tabs.forEach(t => {
@@ -1176,6 +1216,14 @@ function switchTab(tab) {
         renderServerPagination();
     }
 }
+
+// Restore active tab if previously selected
+try {
+    const savedAiserverTab = localStorage.getItem('wagtw_aiserver_tab');
+    if (savedAiserverTab && ['server', 'model', 'search', 'monitoring', 'history'].includes(savedAiserverTab)) {
+        switchTab(savedAiserverTab);
+    }
+} catch(e) {}
 
 // ─── Riwayat API Mati Actions ────────────────────────────────────────────────
 function deleteApiLog(id) {
