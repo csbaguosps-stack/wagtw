@@ -13,12 +13,6 @@ if ($dbModels) {
     foreach ($dbModels as $m) {
         $groqModels[$m['model_name']] = $m['label'];
     }
-} else {
-    // Fallback if db is empty
-    $groqModels = [
-        'llama-3.3-70b-versatile'  => 'LLaMA 3.3 70B Versatile',
-        'llama-3.1-8b-instant'     => 'LLaMA 3.1 8B Instant'
-    ];
 }
 ?>
 

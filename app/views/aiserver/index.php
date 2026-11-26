@@ -2,7 +2,7 @@
 // Note: $groqModels map is no longer needed since we manage AI Models in DB natively
 // Ambil model aktif teratas dari konfigurasi Model AI
 $activeAiModels = array_values(array_filter($data['models'] ?? [], fn($m) => !empty($m['is_active'])));
-$primaryActiveModel = !empty($activeAiModels) ? $activeAiModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+$primaryActiveModel = !empty($activeAiModels) ? $activeAiModels[0]['model_name'] : '';
 // Tab IDs: server, model, search, monitoring, history
 ?>
 
@@ -549,7 +549,7 @@ $primaryActiveModel = !empty($activeAiModels) ? $activeAiModels[0]['model_name']
             </div>
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Model ID (Groq) <span class="text-red-500">*</span></label>
-                <input type="text" id="model-name" name="model_name" required placeholder="Misal: llama-3.3-70b-versatile" class="w-full px-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none text-sm transition font-mono">
+                <input type="text" id="model-name" name="model_name" required placeholder="Misal: openai/gpt-oss-20b" class="w-full px-4 py-3 bg-gray-50 focus:bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none text-sm transition font-mono">
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>

@@ -1796,32 +1796,28 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 serversToTry = await dbQuery('SELECT id, api_key, label FROM ai_servers WHERE is_active = 1 ORDER BY priority DESC, id ASC');
             }
 
-            // ── Kumpulkan daftar model yang akan dicoba (dengan Auto-Fallback ke Model Berkecepatan & Kuota Tinggi)
+            // ── Kumpulkan daftar model yang akan dicoba (HANYA model aktif yang terdaftar di database ai_models)
             let modelsToTry = [];
             const decommModels = ['llama3-8b-8192', 'llama3-70b-8192', 'llama-3.1-70b-versatile', 'llama-3.2-1b-preview', 'llama-3.2-3b-preview'];
 
             const activeDbModels = await dbQuery('SELECT model_name FROM ai_models WHERE is_active = 1 ORDER BY priority DESC, id ASC');
 
-            // 1. Jika device memilih model tertentu (misal llama-3.3-70b-versatile)
+            // 1. Jika device memilih model tertentu yang masih aktif di database
             if (aiConfig.model && aiConfig.model !== 'auto' && !decommModels.includes(aiConfig.model)) {
-                modelsToTry.push({ model_name: aiConfig.model });
+                if (activeDbModels.some(m => m.model_name === aiConfig.model)) {
+                    modelsToTry.push({ model_name: aiConfig.model });
+                }
             }
 
-            // 2. Tambahkan model-model aktif dari database sesuai prioritas
+            // 2. Tambahkan seluruh model aktif dari database sesuai urutan prioritas
             for (const m of activeDbModels) {
                 if (!decommModels.includes(m.model_name) && !modelsToTry.some(x => x.model_name === m.model_name)) {
                     modelsToTry.push(m);
                 }
             }
 
-            // 3. PENTING: Selalu sediakan 'llama-3.1-8b-instant' sebagai model penyelamat (safety fallback)
-            // Model ini memiliki kuota 20.000 TPM (3.3x lipat dari 70b) dan 14.400 RPD, serta respon sangat kilat (<0.5 detik).
-            // Jika model 70B terkena rate limit 6.000 TPM, 8B Instant akan langsung mengambil alih tanpa error!
-            if (!modelsToTry.some(x => x.model_name === 'llama-3.1-8b-instant')) {
-                modelsToTry.push({ model_name: 'llama-3.1-8b-instant' });
-            }
-            if (!modelsToTry.some(x => x.model_name === 'llama-3.3-70b-versatile')) {
-                modelsToTry.unshift({ model_name: 'llama-3.3-70b-versatile' });
+            if (modelsToTry.length === 0) {
+                console.warn(`[AI] Device ${deviceId} — Tidak ada Model AI yang aktif di database! Harap daftarkan dan aktifkan model di menu Model AI.`);
             }
 
             // ── Lakukan percobaan (Auto-Switch 2D: Multi-Server x Multi-Model)
@@ -1850,8 +1846,8 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                         const maskedKey = srv.api_key ? (srv.api_key.substring(0, 10) + '...' + srv.api_key.slice(-6)) : 'unknown';
                         console.warn(`[Groq] ✗ Failed on server: ${srv.label || 'Auto'} | Model: ${mod.model_name} [${errStatus}: ${errMsg}], switching...`);
 
-                        // Deteksi Rate Limit / Quota Exceeded (429 atau pesan limit)
-                        if (groqRes?.isRateLimit || errStatus === '429' || (typeof errMsg === 'string' && /rate[_\s-]?limit|too many requests|tpm|rpm|quota|tokens per minute|requests per minute/i.test(errMsg))) {
+                        // Deteksi Rate Limit / Quota Exceeded (429, 413 TPM limit, atau pesan limit)
+                        if (groqRes?.isRateLimit || errStatus === '429' || errStatus === '413' || (typeof errMsg === 'string' && /rate[_\s-]?limit|too many requests|tpm|rpm|quota|tokens per minute|requests per minute|request too large/i.test(errMsg))) {
                             isRateLimited = true;
                             // Jeda singkat 600ms sebelum beralih ke model / key cadangan
                             await new Promise(r => setTimeout(r, 600));

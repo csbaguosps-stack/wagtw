@@ -28,23 +28,45 @@ const DECOMMISSIONED_MAP = {
  */
 async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 450) {
     return new Promise((resolve) => {
-        let safeModel = (model && typeof model === 'string') ? model.trim() : 'llama-3.3-70b-versatile';
+        let safeModel = (model && typeof model === 'string') ? model.trim() : '';
         if (DECOMMISSIONED_MAP[safeModel]) {
             safeModel = DECOMMISSIONED_MAP[safeModel];
         }
+
         if (!safeModel || safeModel === 'auto') {
-            safeModel = 'llama-3.3-70b-versatile';
+            resolve({ ok: false, error: 'Model AI belum dipilih atau tidak valid.', statusCode: 400 });
+            return;
+        }
+
+        let messages = [
+            ...(sysPrompt ? [{ role: 'system', content: sysPrompt }] : []),
+            ...(Array.isArray(chatHistory) ? chatHistory : [{ role: 'user', content: String(chatHistory) }]),
+        ];
+
+        // Safety check TPM: Untuk model dengan kuota ketat 8.000 TPM (seperti gpt-oss-20b / gpt-oss-120b)
+        let effectiveMaxTokens = maxTokens;
+        const isLowTpmModel = /gpt-oss|20b|120b/i.test(safeModel);
+        if (isLowTpmModel) {
+            effectiveMaxTokens = Math.min(280, maxTokens);
+        }
+
+        // Pangkas payload jika total karakter sangat panjang (> 14.000 karakter ~ 4.500-5.500 tokens)
+        // agar request + max_tokens tidak pernah melampaui limit TPM 8.000 (HTTP 413)
+        let totalChars = messages.reduce((acc, m) => acc + (m.content ? m.content.length : 0), 0);
+        if (totalChars > 13000 && messages.length > 1) {
+            const sys = messages[0].role === 'system' ? messages[0] : null;
+            if (sys && sys.content && sys.content.length > 10000) {
+                sys.content = sys.content.substring(0, 9500) + '\n\n[Data dipangkas demi efisiensi kuota TPM...]';
+            }
+            const recent = messages.slice(-2);
+            messages = sys ? [sys, ...recent] : recent;
+            console.log(`[Groq] Prompt dipangkas agar total request aman di bawah batas TPM 8.000 untuk model ${safeModel}`);
         }
 
         const payload = JSON.stringify({
             model: safeModel,
-            messages: [
-                ...(sysPrompt ? [{ role: 'system', content: sysPrompt }] : []),
-                ...(Array.isArray(chatHistory) ? chatHistory : [{ role: 'user', content: String(chatHistory) }]),
-            ],
-            // Default 450 tokens (~300 kata): Sangat pas & padat untuk WhatsApp,
-            // dan menghemat 1.050 tokens dari kuota reservasi Groq TPM per request!
-            max_tokens: Math.min(1000, Math.max(150, maxTokens)),
+            messages: messages,
+            max_tokens: Math.min(1000, Math.max(150, effectiveMaxTokens)),
             temperature: 0.6,
         });
 

@@ -55,7 +55,7 @@ class Aiserver extends Controller {
         
         // Utamakan model pertama yang aktif di Model AI
         $activeModels = $this->model('AiServer_model')->getActiveModelsGlobal();
-        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : '';
         $model        = (!empty($_POST['model']) && !in_array($_POST['model'], ['llama3-8b-8192', 'llama3-70b-8192'])) ? trim($_POST['model']) : $primaryModel;
         
         $isActive  = isset($_POST['is_active']) ? 1 : 0;
@@ -139,7 +139,7 @@ class Aiserver extends Controller {
         $apiKey    = trim($_POST['api_key'] ?? '');
         
         $activeModels = $this->model('AiServer_model')->getActiveModelsGlobal();
-        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : '';
         $model        = (!empty($_POST['model']) && !in_array($_POST['model'], ['llama3-8b-8192', 'llama3-70b-8192'])) ? trim($_POST['model']) : $primaryModel;
         
         $isActive  = isset($_POST['is_active']) ? 1 : 0;
@@ -404,7 +404,7 @@ class Aiserver extends Controller {
 
         // Selalu ambil model-model yang aktif di tabel ai_models (Model AI)
         $activeModels = $this->model('AiServer_model')->getActiveModelsGlobal();
-        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : 'llama-3.3-70b-versatile';
+        $primaryModel = !empty($activeModels) ? $activeModels[0]['model_name'] : '';
         $activeModelNames = array_column($activeModels ?: [], 'model_name');
 
         // Jika model kosong, atau decommissioned, atau tidak ada dalam daftar model aktif:

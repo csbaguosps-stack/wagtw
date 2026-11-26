@@ -418,11 +418,6 @@ class Device extends Controller {
             foreach ($dbModels as $m) {
                 $models[$m['model_name']] = $m['label'];
             }
-        } else {
-            $models = [
-                'llama-3.3-70b-versatile' => 'LLaMA 3.3 70B Versatile (Cerdas)',
-                'llama-3.1-8b-instant'    => 'LLaMA 3.1 8B Instant (Cepat)'
-            ];
         }
         
         echo json_encode(['status' => 'success', 'settings' => $settings, 'servers' => $servers, 'models' => $models]);
