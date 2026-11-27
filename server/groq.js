@@ -20,6 +20,86 @@ const DECOMMISSIONED_MAP = {
 };
 
 /**
+ * Memastikan pesan balasan AI tidak terpotong di tengah jalan atau menggantung
+ * Jika terpotong akibat limit token / output terputus, buang baris yang tidak tuntas dan tutup dengan rapi
+ */
+function fixHangingText(text, finishReason = 'stop') {
+    if (!text || typeof text !== 'string') return text;
+    let trimmed = text.trim();
+    if (!trimmed) return trimmed;
+
+    // Tanda baca penutup kalimat / pesan WhatsApp yang sah
+    const validEndings = ['.', '!', '?', '😊', '🙏', '✨', '👍', '👋', '”', '"', ')', '>', '…', '🎉', '🌟'];
+    const isTruncated = finishReason === 'length' || !validEndings.some(e => trimmed.endsWith(e));
+    
+    if (!isTruncated) {
+        return trimmed;
+    }
+
+    const lines = trimmed.split('\n');
+    let modified = false;
+
+    while (lines.length > 0) {
+        let lastLine = lines[lines.length - 1].trim();
+        if (!lastLine) {
+            lines.pop();
+            continue;
+        }
+
+        // Jika baris terakhir sudah diakhiri tanda baca penutup yang sah, selesai
+        if (validEndings.some(e => lastLine.endsWith(e))) {
+            break;
+        }
+
+        // Jika baris terakhir adalah poin/bullet yang terpotong di tengah kalimat
+        // contoh: "- Beli lensa ≥ Rp 500.000 → Free frame senilai Rp" atau "Mohon"
+        if (lastLine.startsWith('-') || lastLine.startsWith('•') || lastLine.startsWith('*') || /^\d+[\.\)]/.test(lastLine) || lastLine.length < 90) {
+            lines.pop();
+            modified = true;
+            // Jika baris sebelumnya adalah judul/header item yang isinya baru saja terhapus
+            // contoh: "• Lensa FUJI - Free Frame"
+            if (lines.length > 0) {
+                let prev = lines[lines.length - 1].trim();
+                if ((prev.startsWith('•') || prev.startsWith('*') || prev.startsWith('-')) && !prev.endsWith('.') && !prev.endsWith(':')) {
+                    lines.pop();
+                }
+            }
+            continue;
+        }
+
+        // Jika baris biasa terpotong, potong sampai tanda baca kalimat terakhir yang utuh
+        const lastPunctIdx = Math.max(
+            lastLine.lastIndexOf('. '),
+            lastLine.lastIndexOf('.'),
+            lastLine.lastIndexOf('!'),
+            lastLine.lastIndexOf('?')
+        );
+        if (lastPunctIdx > 0) {
+            lines[lines.length - 1] = lastLine.substring(0, lastPunctIdx + 1).trim();
+            modified = true;
+            break;
+        } else {
+            lines.pop();
+            modified = true;
+        }
+    }
+
+    trimmed = lines.join('\n').trim();
+    if (!trimmed) return text.trim();
+
+    if (!validEndings.some(e => trimmed.endsWith(e))) {
+        trimmed += '.';
+    }
+
+    // Jika pesan sebelumnya terpotong di tengah jalan, tambahkan pertanyaan penutup agar tetap natural dan tuntas
+    if (modified || finishReason === 'length') {
+        trimmed += '\n\nBoleh kami bantu info lebih lengkap atau mau kami bantu cekkan stoknya kak? 😊';
+    }
+
+    return trimmed;
+}
+
+/**
  * Call Groq API
  * @param {string} apiKey       — Groq API Key
  * @param {string} model        — Model ID (e.g. openai/gpt-oss-20b or openai/gpt-oss-120b)
@@ -46,14 +126,13 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 600) 
         ];
 
         // ── BERSIHKAN FORMAT PAYLOAD TANPA MEMOTONG DATA PENGETAHUAN TOKO ──
-        // Hapus spasi berlebih dan pembatas dekoratif tanpa menghilangkan satu kata pun data bisnis
+        // Hapus baris pembatas dekoratif (===, ---), spasi berlebih tanpa menghilangkan kata/fakta
         if (messages[0]?.role === 'system' && messages[0].content) {
             messages[0].content = messages[0].content
+                .replace(/[=\-_*~#]{3,}/g, '')
                 .replace(/[ \t]+/g, ' ')
-                .replace(/={4,}/g, '===')
-                .replace(/-{4,}/g, '---')
-                .replace(/_{4,}/g, '___')
-                .replace(/\n\s*\n\s*\n+/g, '\n\n')
+                .replace(/\r\n/g, '\n')
+                .replace(/\n{3,}/g, '\n\n')
                 .trim();
         }
 
@@ -67,14 +146,14 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 600) 
             totalChars = messages.reduce((acc, m) => acc + (m.content ? m.content.length : 0), 0);
         }
 
-        // Estimasi token input secara akurat (~2.8 karakter per token)
-        const estimatedInputTokens = Math.ceil(totalChars / 2.8);
+        // Estimasi token input secara akurat (~3.0 karakter per token pada teks Indonesia)
+        const estimatedInputTokens = Math.ceil(totalChars / 3.0);
 
         // Alokasikan max_tokens yang optimal:
-        // Cukup besar (400 - 550 tokens) agar teks TIDAK TERPOTONG dan sangat detail,
-        // namun tetap di bawah sisa kuota (7.500 - estimatedInputTokens) agar tidak pernah 413.
-        const maxAllowedTokens = Math.max(250, Math.min(500, 7500 - estimatedInputTokens));
-        const effectiveMaxTokens = Math.min(maxAllowedTokens, maxTokens);
+        // Cukup besar (450 - 650 tokens) agar teks TIDAK TERPOTONG dan sangat detail,
+        // namun tetap di bawah batas kuota TPM (7.700 - estimatedInputTokens) agar tidak pernah 413.
+        const maxAllowedTokens = Math.max(350, Math.min(650, 7700 - estimatedInputTokens));
+        const effectiveMaxTokens = Math.min(maxAllowedTokens, maxTokens || 600);
 
         const payload = JSON.stringify({
             model: safeModel,
@@ -102,7 +181,11 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 600) 
                 try {
                     const json = JSON.parse(data);
                     if (res.statusCode === 200 && json.choices?.[0]?.message?.content) {
-                        resolve({ ok: true, text: json.choices[0].message.content.trim(), statusCode: 200, isRateLimit: false });
+                        const rawText = json.choices[0].message.content.trim();
+                        const finishReason = json.choices[0].finish_reason || 'stop';
+                        // Perbaiki teks jika terpotong / menggantung
+                        const fixedText = fixHangingText(rawText, finishReason);
+                        resolve({ ok: true, text: fixedText, statusCode: 200, isRateLimit: false, finishReason });
                     } else {
                         const errMsg = json.error?.message || `HTTP ${res.statusCode}`;
                         const isRateLimit = res.statusCode === 429 || /rate[_\s-]?limit|too many requests|tpm|rpm|quota/i.test(errMsg);
@@ -162,4 +245,4 @@ async function callGroqAutoSwitch(servers, sysPrompt, chatHistory) {
     return null;
 }
 
-module.exports = { callGroq, callGroqAutoSwitch };
+module.exports = { callGroq, callGroqAutoSwitch, fixHangingText };

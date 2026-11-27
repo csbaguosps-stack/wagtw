@@ -34,7 +34,7 @@ const {
     generateWAMessageFromContent,
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
-const { callGroqAutoSwitch, callGroq } = require('./groq');
+const { callGroqAutoSwitch, callGroq, fixHangingText } = require('./groq');
 const { searchAutoSwitch, needsWebSearch } = require('./search');
 
 // ─── Cache Pemetaan LID <-> Phone Number (Baileys v7) ─────────────────────────
@@ -1695,17 +1695,19 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
             let aiReply = null;
             let sysPrompt = aiConfig.rules || 'Kamu adalah asisten WhatsApp yang ramah dan helpful. Balas dengan singkat dan jelas dalam Bahasa Indonesia.';
 
-            // ── Aturan Format Balasan WhatsApp (Anti-Tabel & Ramah Layar HP) ───
+            // ── Aturan Format Balasan WhatsApp (Anti-Tabel, Anti-Gantung & Ramah Layar HP) ───
             const waFormatRules = `
-[ATURAN FORMAT BALASAN WHATSAPP (WAJIB DIIKUTI)]:
-1. Jawaban WAJIB rapi, bersih, dan nyaman dibaca di layar HP WhatsApp.
+[ATURAN FORMAT BALASAN WHATSAPP & PENULISAN TUNTAS (WAJIB DIIKUTI)]:
+1. Jawaban WAJIB rapi, bersih, padat, dan nyaman dibaca di layar HP WhatsApp.
 2. DILARANG KERAS menggunakan format tabel Markdown (karakter '|'). WhatsApp TIDAK mendukung tabel Markdown!
 3. DILARANG menggunakan tag HTML seperti <br>, <b>, <i>, dsb.
 4. Gunakan format daftar poin (bullet '•' atau nomor '1.', '2.') untuk menguraikan penjelasan atau langkah.
 5. Gunakan cetak tebal WhatsApp (*kata*) untuk menonjolkan judul poin atau istilah penting.
 6. Berikan jeda 1 baris kosong antar poin atau paragraf agar teks tidak menumpuk rapat.
-7. Jawab secara lengkap, jelas, dan tuntas sampai selesai.
-8. FORMAT NOMOR TELEPON/WHATSAPP: Jika memberikan nomor telepon atau kontak WhatsApp, WAJIB tuliskan dalam format tautan/link yang BISA LANGSUNG DIKLIK oleh pelanggan di WhatsApp, yaitu https://wa.me/628xxx (contoh: 'Telp/WA: https://wa.me/6281234567890'). Dilarang memecah angka telepon dengan spasi atau karakter aneh agar link tetap utuh dan bisa langsung diklik.`;
+7. PENULISAN WAJIB TUNTAS DAN TIDAK BOLEH MENGGANTUNG: Dilarang keras memotong kalimat di tengah jalan atau menggantung tanpa akhir. Setiap kalimat wajib selesai sampai tanda baca penutup yang jelas (. / ! / ?).
+8. PADAT, DETAIL & TO THE POINT: Jelaskan jawaban secara padat, jelas, dan tuntas. Jika ada banyak promo/cabang/katalog (lebih dari 3 pilihan), berikan rangkuman 2-3 pilihan utama yang paling populer secara tuntas, lalu berikan penawaran ramah jika ingin cek opsi lainnya. JANGAN memaksakan menulis seluruh katalog sekaligus agar balasan tidak terpotong panjangnya.
+9. Selalu akhiri pesan dengan kalimat penutup atau pertanyaan ramah yang relevan dan selesai sempurna.
+10. FORMAT NOMOR TELEPON/WHATSAPP: Jika memberikan nomor telepon atau kontak WhatsApp, WAJIB tuliskan dalam format tautan/link yang BISA LANGSUNG DIKLIK oleh pelanggan di WhatsApp, yaitu https://wa.me/628xxx (contoh: 'Telp/WA: https://wa.me/6281234567890'). Dilarang memecah angka telepon dengan spasi atau karakter aneh agar link tetap utuh dan bisa langsung diklik.`;
 
             sysPrompt = sysPrompt + "\n\n" + waFormatRules;
 
@@ -1840,7 +1842,7 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                     for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
                         const mod = modelsToTry[mIdx];
                         console.log(`[Groq] Trying server ${sIdx + 1}/${serversToTry.length}: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
-                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext, 550);
+                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext, 600);
                         if (groqRes && groqRes.ok && groqRes.text) {
                             aiReply = groqRes.text;
                             console.log(`[Groq] ✓ Got reply from server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
@@ -1874,6 +1876,8 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
             }
 
             if (aiReply) {
+                // Perbaiki dan tuntaskan jika ada potongan teks menggantung
+                aiReply = fixHangingText(aiReply);
                 // Bersihkan dan rapikan format teks untuk WhatsApp
                 aiReply = cleanWhatsAppFormatting(aiReply);
 
