@@ -336,7 +336,9 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                      data-contact="${escapeHtml(c.contact_phone)}" 
                      data-display="${escapeHtml(c.contact_display)}"
                      data-device-name="${escapeHtml(c.device_name)}"
-                     data-device-phone="${escapeHtml(c.device_phone)}">
+                     data-device-phone="${escapeHtml(c.device_phone)}"
+                     data-avatar-color="${c.avatar_color}"
+                     data-avatar-text="${c.avatar_text}">
                     
                     <!-- Avatar Kontak -->
                     <div class="w-12 h-12 rounded-full ${c.avatar_color} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs select-none">
@@ -368,13 +370,23 @@ $pageTitle = $data['title'] ?? 'History WA Web';
     }
 
     // ─── BUKA PERCAKAPAN KONTAK (PANEL KANAN) ──────────────────────────────────
-    function openConversation(deviceId, contactPhone, contactDisplay, deviceName, devicePhone) {
+    function openConversation(deviceId, contactPhone, contactDisplay, deviceName, devicePhone, avatarColor, avatarText) {
+        deviceId       = parseInt(deviceId) || 0;
+        contactPhone   = String(contactPhone || '').trim();
+        contactDisplay = String(contactDisplay || contactPhone).trim();
+        deviceName     = String(deviceName || '').trim();
+        devicePhone    = String(devicePhone || '').trim();
+
+        if (!contactPhone) return;
+
         activeConversation = {
             device_id: deviceId,
             contact_phone: contactPhone,
             contact_display: contactDisplay,
             device_name: deviceName,
-            device_phone: devicePhone
+            device_phone: devicePhone,
+            avatar_color: avatarColor,
+            avatar_text: avatarText
         };
 
         // Update form hidden inputs
@@ -383,9 +395,16 @@ $pageTitle = $data['title'] ?? 'History WA Web';
 
         // Update Chat Header Info
         $('#chat-header-title').text(contactDisplay);
-        $('#chat-header-device').text((deviceName || 'Device #' + deviceId) + (devicePhone ? ' (+' + devicePhone + ')' : ''));
-        $('#chat-header-avatar').text(contactPhone.slice(-2));
-        $('#link-direct-wa').attr('href', 'https://wa.me/' + contactPhone.replace(/[^0-9]/g, ''));
+        const devLabel = (deviceName || ('Device #' + deviceId)) + (devicePhone ? ' (+' + devicePhone + ')' : '');
+        $('#chat-header-device').text(devLabel);
+        
+        const avatarInitial = avatarText || (contactPhone.length >= 2 ? contactPhone.slice(-2) : 'WA');
+        $('#chat-header-avatar')
+            .attr('class', `w-10 h-10 rounded-full ${avatarColor || 'bg-emerald-600'} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs select-none`)
+            .text(avatarInitial);
+        
+        const cleanPhone = contactPhone.replace(/[^0-9]/g, '');
+        $('#link-direct-wa').attr('href', 'https://wa.me/' + cleanPhone);
 
         // Switch to chat screen
         $('#waweb-empty-state').addClass('hidden');
@@ -395,8 +414,10 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         $('#waweb-left-pane').addClass('hidden md:flex');
         $('#waweb-right-pane').removeClass('hidden').addClass('flex');
 
-        // Re-render conversation items to highlight active item
-        renderConversationsList();
+        // Highlight active contact item
+        $('.chat-contact-item').removeClass('bg-[#f0f2f5] border-l-4 border-emerald-500');
+        $(`.chat-contact-item[data-contact="${escapeHtml(contactPhone)}"][data-device-id="${deviceId}"]`)
+            .addClass('bg-[#f0f2f5] border-l-4 border-emerald-500');
 
         // Muat pesan dari database
         loadMessages(deviceId, contactPhone, false);
@@ -406,6 +427,9 @@ $pageTitle = $data['title'] ?? 'History WA Web';
     function loadMessages(deviceId, contactPhone, isPolling = false) {
         if (isFetchingMessages) return;
         isFetchingMessages = true;
+
+        deviceId = parseInt(deviceId) || 0;
+        contactPhone = String(contactPhone || '').trim();
 
         const container = $('#waweb-messages-container');
         if (!isPolling) {
@@ -439,10 +463,28 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                     } else if (messages.length > 0) {
                         appendNewMessages(messages);
                     }
+                } else {
+                    if (!isPolling) {
+                        container.html(`
+                            <div class="flex flex-col items-center justify-center h-full text-center p-6 text-gray-500">
+                                <p class="text-xs font-semibold text-red-500 mb-1">Gagal memuat pesan</p>
+                                <p class="text-[11px] text-gray-400">${escapeHtml(res.message || 'Terjadi kesalahan')}</p>
+                            </div>
+                        `);
+                    }
                 }
             },
-            error: function() {
+            error: function(xhr, status, error) {
                 isFetchingMessages = false;
+                console.error('[WA Web] Gagal memuat pesan:', status, error, xhr.responseText);
+                if (!isPolling) {
+                    container.html(`
+                        <div class="flex flex-col items-center justify-center h-full text-center p-6 text-gray-500">
+                            <p class="text-xs font-semibold text-red-500 mb-1">Terjadi kesalahan koneksi</p>
+                            <p class="text-[11px] text-gray-400">Silakan klik ikon segarkan untuk mencoba lagi.</p>
+                        </div>
+                    `);
+                }
             }
         });
     }
@@ -708,13 +750,19 @@ $pageTitle = $data['title'] ?? 'History WA Web';
 
     // ─── EVENT HANDLERS & NAVIGATION ──────────────────────────────────────────
     // Klik Kontak dari Daftar
-    $(document).on('click', '.chat-contact-item', function() {
-        const deviceId    = $(this).data('device-id');
-        const contact     = $(this).data('contact');
-        const display     = $(this).data('display');
-        const devName     = $(this).data('device-name');
-        const devPhone    = $(this).data('device-phone');
-        openConversation(deviceId, contact, display, devName, devPhone);
+    $(document).on('click', '.chat-contact-item', function(e) {
+        e.preventDefault();
+        const item = $(this);
+        const deviceId    = parseInt(item.attr('data-device-id')) || 0;
+        const contact     = String(item.attr('data-contact') || '').trim();
+        const display     = String(item.attr('data-display') || contact).trim();
+        const devName     = String(item.attr('data-device-name') || '').trim();
+        const devPhone    = String(item.attr('data-device-phone') || '').trim();
+        const avatarColor = String(item.attr('data-avatar-color') || 'bg-emerald-600').trim();
+        const avatarText  = String(item.attr('data-avatar-text') || '').trim();
+
+        if (!contact) return;
+        openConversation(deviceId, contact, display, devName, devPhone, avatarColor, avatarText);
     });
 
     // Tombol Back di Mobile

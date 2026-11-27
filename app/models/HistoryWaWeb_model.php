@@ -94,6 +94,9 @@ class HistoryWaWeb_model {
      */
     public function getMessages($userId, $deviceId, $contactPhone, $limit = 200, $afterId = 0)
     {
+        $limitInt = intval($limit) > 0 ? intval($limit) : 200;
+        $cleanPhone = preg_replace('/[^0-9]/', '', $contactPhone);
+
         $sql = "SELECT 
                     m.*,
                     d.name AS device_name,
@@ -101,28 +104,35 @@ class HistoryWaWeb_model {
                 FROM messages m
                 LEFT JOIN devices d ON d.id = m.device_id
                 WHERE m.user_id IN ($userId)
-                  AND m.device_id = :device_id
-                  AND m.is_deleted = 0
-                  AND (
-                      (m.direction = 'in' AND m.from_phone = :contact_in)
+                  AND m.is_deleted = 0";
+
+        if ($deviceId > 0) {
+            $sql .= " AND m.device_id = :device_id";
+        }
+
+        $sql .= " AND (
+                      (m.direction = 'in' AND (m.from_phone = :contact_in OR REPLACE(m.from_phone, '+', '') = :clean_in))
                       OR
-                      (m.direction = 'out' AND m.to_phone = :contact_out)
+                      (m.direction = 'out' AND (m.to_phone = :contact_out OR REPLACE(m.to_phone, '+', '') = :clean_out))
                   )";
 
         if ($afterId > 0) {
             $sql .= " AND m.id > :after_id ORDER BY m.id ASC";
         } else {
-            $sql .= " ORDER BY m.id DESC LIMIT :limit";
+            $sql .= " ORDER BY m.id DESC LIMIT {$limitInt}";
         }
 
         $this->db->query($sql);
-        $this->db->bind('device_id', $deviceId);
+        if ($deviceId > 0) {
+            $this->db->bind('device_id', $deviceId);
+        }
         $this->db->bind('contact_in', $contactPhone);
+        $this->db->bind('clean_in', $cleanPhone);
         $this->db->bind('contact_out', $contactPhone);
+        $this->db->bind('clean_out', $cleanPhone);
+
         if ($afterId > 0) {
             $this->db->bind('after_id', $afterId);
-        } else {
-            $this->db->bind('limit', (int)$limit, PDO::PARAM_INT);
         }
 
         $results = $this->db->resultSet();
@@ -137,15 +147,22 @@ class HistoryWaWeb_model {
      */
     public function markAsRead($userId, $deviceId, $contactPhone)
     {
-        $this->db->query("UPDATE messages 
-                          SET status = 'read' 
-                          WHERE user_id IN ($userId) 
-                            AND device_id = :device_id 
-                            AND direction = 'in' 
-                            AND from_phone = :contact 
-                            AND status != 'read'");
-        $this->db->bind('device_id', $deviceId);
+        $cleanPhone = preg_replace('/[^0-9]/', '', $contactPhone);
+        $sql = "UPDATE messages 
+                SET status = 'read' 
+                WHERE user_id IN ($userId) 
+                  AND direction = 'in' 
+                  AND (from_phone = :contact OR REPLACE(from_phone, '+', '') = :clean)
+                  AND status != 'read'";
+        if ($deviceId > 0) {
+            $sql .= " AND device_id = :device_id";
+        }
+        $this->db->query($sql);
+        if ($deviceId > 0) {
+            $this->db->bind('device_id', $deviceId);
+        }
         $this->db->bind('contact', $contactPhone);
+        $this->db->bind('clean', $cleanPhone);
         $this->db->execute();
         return $this->db->rowCount();
     }
@@ -155,17 +172,25 @@ class HistoryWaWeb_model {
      */
     public function deleteConversation($userId, $deviceId, $contactPhone)
     {
-        $this->db->query("DELETE FROM messages 
-                          WHERE user_id IN ($userId) 
-                            AND device_id = :device_id 
-                            AND (
-                                (direction = 'in' AND from_phone = :contact_in)
-                                OR
-                                (direction = 'out' AND to_phone = :contact_out)
-                            )");
-        $this->db->bind('device_id', $deviceId);
+        $cleanPhone = preg_replace('/[^0-9]/', '', $contactPhone);
+        $sql = "DELETE FROM messages 
+                WHERE user_id IN ($userId)";
+        if ($deviceId > 0) {
+            $sql .= " AND device_id = :device_id";
+        }
+        $sql .= " AND (
+                      (direction = 'in' AND (from_phone = :contact_in OR REPLACE(from_phone, '+', '') = :clean_in))
+                      OR
+                      (direction = 'out' AND (to_phone = :contact_out OR REPLACE(to_phone, '+', '') = :clean_out))
+                  )";
+        $this->db->query($sql);
+        if ($deviceId > 0) {
+            $this->db->bind('device_id', $deviceId);
+        }
         $this->db->bind('contact_in', $contactPhone);
+        $this->db->bind('clean_in', $cleanPhone);
         $this->db->bind('contact_out', $contactPhone);
+        $this->db->bind('clean_out', $cleanPhone);
         $this->db->execute();
         return $this->db->rowCount();
     }

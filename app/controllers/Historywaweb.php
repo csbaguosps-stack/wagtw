@@ -138,8 +138,8 @@ class Historywaweb extends Controller {
         $contact  = trim($_GET['contact'] ?? '');
         $afterId  = intval($_GET['after_id'] ?? 0);
 
-        if (!$deviceId || empty($contact)) {
-            echo json_encode(['status' => 'error', 'message' => 'Parameter device_id dan contact wajib diisi!']);
+        if (empty($contact)) {
+            echo json_encode(['status' => 'error', 'message' => 'Parameter contact wajib diisi!']);
             return;
         }
 
@@ -148,7 +148,7 @@ class Historywaweb extends Controller {
             $model->markAsRead($userId, $deviceId, $contact);
         }
 
-        $device = $model->getDeviceById($deviceId, $userId);
+        $device = ($deviceId > 0) ? $model->getDeviceById($deviceId, $userId) : null;
         $rawMessages = $model->getMessages($userId, $deviceId, $contact, 200, $afterId);
 
         $today = date('Y-m-d');
