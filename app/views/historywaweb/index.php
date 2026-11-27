@@ -231,22 +231,59 @@ $pageTitle = $data['title'] ?? 'History WA Web';
     let activeConversation = null; // { device_id, contact_phone, contact_display, device_name, device_phone }
     let latestMessageId = 0;
     let isFetchingMessages = false;
+    let isFetchingConversations = false;
     let isSending = false;
+    let pollIntervalId = null;
+    let lastConversationsJson = '';
 
     // Inisialisasi saat halaman dimuat
     function initWaWeb() {
         loadConversations();
+        startPolling();
+        bindGlobalEvents();
+    }
 
-        // Register polling interval via WAGTW SPA Global Interval Manager (setiap 3.5 detik)
-        if (typeof window.registerInterval === 'function') {
-            window.registerInterval(() => {
-                pollUpdates();
-            }, 3500);
+    // Format jam 24 jam HH:mm lokal untuk bubble optimistik
+    function formatCurrentTime() {
+        const d = new Date();
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        return h + ':' + m;
+    }
+
+    function startPolling() {
+        if (pollIntervalId) {
+            clearInterval(pollIntervalId);
+            pollIntervalId = null;
         }
+
+        // Polling setiap 2 detik (2000 ms) agar percakapan masuk & keluar tampil langsung tanpa refresh
+        pollIntervalId = setInterval(pollUpdates, 2000);
+
+        // Daftarkan ke interval manager global SPA jika tersedia
+        if (window.appIntervals && Array.isArray(window.appIntervals)) {
+            window.appIntervals.push(pollIntervalId);
+        }
+    }
+
+    function bindGlobalEvents() {
+        // Tangkap event pesan baru dari background poller main.js jika ada
+        const onGlobalNewMsg = function(e) {
+            if ($('#waweb-conversations-list').length > 0) {
+                loadConversations(true);
+                if (activeConversation) {
+                    loadMessages(activeConversation.device_id, activeConversation.contact_phone, true);
+                }
+            }
+        };
+        window.addEventListener('wagtw:new_message', onGlobalNewMsg);
     }
 
     // ─── AMBIL DAFTAR CHAT DARI SERVER ──────────────────────────────────────────
     function loadConversations(isBackground = false) {
+        if (isFetchingConversations) return;
+        isFetchingConversations = true;
+
         const deviceId = $('#waweb-device-filter').val() || 0;
         const search   = $('#waweb-search-input').val() || '';
 
@@ -266,11 +303,19 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                 if (reloadIcon) reloadIcon.classList.remove('animate-spin');
                 if (res.status === 'success') {
                     allConversations = res.data || [];
-                    renderConversationsList();
+                    const currentJson = JSON.stringify(allConversations);
+                    // Hanya re-render jika data benar-benar berubah untuk menghindari jitter scroll
+                    if (!isBackground || currentJson !== lastConversationsJson) {
+                        lastConversationsJson = currentJson;
+                        renderConversationsList();
+                    }
                 }
             },
             error: function() {
                 if (reloadIcon) reloadIcon.classList.remove('animate-spin');
+            },
+            complete: function() {
+                isFetchingConversations = false;
             }
         });
     }
@@ -311,9 +356,11 @@ $pageTitle = $data['title'] ?? 'History WA Web';
 
         let html = '';
         filtered.forEach(c => {
+            const cleanActivePhone  = activeConversation ? String(activeConversation.contact_phone).replace(/[^0-9]/g, '') : '';
+            const cleanContactPhone = String(c.contact_phone).replace(/[^0-9]/g, '');
             const isActive = activeConversation && 
-                             activeConversation.device_id === c.device_id && 
-                             activeConversation.contact_phone === c.contact_phone;
+                             cleanActivePhone === cleanContactPhone &&
+                             (activeConversation.device_id === 0 || c.device_id === 0 || activeConversation.device_id === c.device_id);
 
             // Checkmark icon untuk pesan keluar
             let checkmarkHtml = '';
@@ -325,8 +372,9 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                 }
             }
 
-            // Unread badge
-            const unreadBadge = c.unread_count > 0 
+            // Unread badge (hanya tampil jika bukan percakapan aktif yang sedang dilihat)
+            const showUnread = c.unread_count > 0 && !isActive;
+            const unreadBadge = showUnread 
                 ? `<span class="bg-emerald-500 text-white text-[10px] font-bold min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center shrink-0 shadow-2xs">${c.unread_count}</span>` 
                 : '';
 
@@ -389,6 +437,13 @@ $pageTitle = $data['title'] ?? 'History WA Web';
             avatar_text: avatarText
         };
 
+        // Reset status unread di memori lokal secara instan
+        const cleanPhone = contactPhone.replace(/[^0-9]/g, '');
+        const targetConv = allConversations.find(c => String(c.contact_phone).replace(/[^0-9]/g, '') === cleanPhone);
+        if (targetConv) {
+            targetConv.unread_count = 0;
+        }
+
         // Update form hidden inputs
         $('#active-chat-device-id').val(deviceId);
         $('#active-chat-contact').val(contactPhone);
@@ -398,12 +453,11 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         const devLabel = (deviceName || ('Device #' + deviceId)) + (devicePhone ? ' (+' + devicePhone + ')' : '');
         $('#chat-header-device').text(devLabel);
         
-        const avatarInitial = avatarText || (contactPhone.length >= 2 ? contactPhone.slice(-2) : 'WA');
+        const avatarInitial = avatarText || (cleanPhone.length >= 2 ? cleanPhone.slice(-2) : 'WA');
         $('#chat-header-avatar')
             .attr('class', `w-10 h-10 rounded-full ${avatarColor || 'bg-emerald-600'} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs select-none`)
             .text(avatarInitial);
         
-        const cleanPhone = contactPhone.replace(/[^0-9]/g, '');
         $('#link-direct-wa').attr('href', 'https://wa.me/' + cleanPhone);
 
         // Switch to chat screen
@@ -414,10 +468,11 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         $('#waweb-left-pane').addClass('hidden md:flex');
         $('#waweb-right-pane').removeClass('hidden').addClass('flex');
 
-        // Highlight active contact item
+        // Highlight active contact item & bersihkan unread badge di list
         $('.chat-contact-item').removeClass('bg-[#f0f2f5] border-l-4 border-emerald-500');
-        $(`.chat-contact-item[data-contact="${escapeHtml(contactPhone)}"][data-device-id="${deviceId}"]`)
-            .addClass('bg-[#f0f2f5] border-l-4 border-emerald-500');
+        const activeItem = $(`.chat-contact-item[data-contact="${escapeHtml(contactPhone)}"]`);
+        activeItem.addClass('bg-[#f0f2f5] border-l-4 border-emerald-500');
+        activeItem.find('.bg-emerald-500').remove();
 
         // Muat pesan dari database
         loadMessages(deviceId, contactPhone, false);
@@ -430,6 +485,11 @@ $pageTitle = $data['title'] ?? 'History WA Web';
 
         deviceId = parseInt(deviceId) || 0;
         contactPhone = String(contactPhone || '').trim();
+
+        if (!contactPhone) {
+            isFetchingMessages = false;
+            return;
+        }
 
         const container = $('#waweb-messages-container');
         if (!isPolling) {
@@ -454,7 +514,6 @@ $pageTitle = $data['title'] ?? 'History WA Web';
             },
             dataType: 'json',
             success: function(res) {
-                isFetchingMessages = false;
                 if (res.status === 'success') {
                     const messages = res.messages || [];
 
@@ -475,7 +534,6 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                 }
             },
             error: function(xhr, status, error) {
-                isFetchingMessages = false;
                 console.error('[WA Web] Gagal memuat pesan:', status, error, xhr.responseText);
                 if (!isPolling) {
                     container.html(`
@@ -485,6 +543,9 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                         </div>
                     `);
                 }
+            },
+            complete: function() {
+                isFetchingMessages = false;
             }
         });
     }
@@ -509,7 +570,8 @@ $pageTitle = $data['title'] ?? 'History WA Web';
 
         let currentDateGroup = '';
         messages.forEach(m => {
-            if (m.id > latestMessageId) latestMessageId = m.id;
+            const numId = parseInt(m.id) || 0;
+            if (numId > latestMessageId) latestMessageId = numId;
 
             // Tanggal Divider
             if (m.date_label !== currentDateGroup) {
@@ -529,15 +591,35 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         scrollToBottom();
     }
 
-    // ─── TAMBAHKAN PESAN BARU DARI POLLING ─────────────────────────────────────
+    // ─── TAMBAHKAN PESAN BARU DARI POLLING / PENGIRIMAN ────────────────────────
     function appendNewMessages(newMessages) {
         const container = $('#waweb-messages-container');
         let hasIncoming = false;
 
         newMessages.forEach(m => {
-            if (m.id > latestMessageId) latestMessageId = m.id;
-            container.append(buildMessageBubbleHtml(m));
-            if (m.direction === 'in') hasIncoming = true;
+            const numId = parseInt(m.id) || 0;
+            if (numId > latestMessageId) latestMessageId = numId;
+
+            // Jika ini pesan keluar (out) terkonfirmasi, bersihkan bubble sementara (optimistic)
+            if (m.direction === 'out') {
+                const tempMatches = $('.temp-bubble').filter(function() {
+                    return $(this).attr('data-msg-text') === m.message;
+                });
+                if (tempMatches.length > 0) {
+                    tempMatches.first().remove();
+                } else {
+                    $('.temp-bubble').first().remove();
+                }
+            }
+
+            // Mencegah duplikasi elemen bubble jika ID sudah ada di layar
+            if ($('#msg-row-' + m.id).length === 0) {
+                container.append(buildMessageBubbleHtml(m));
+            }
+
+            if (m.direction === 'in') {
+                hasIncoming = true;
+            }
         });
 
         scrollToBottom();
@@ -558,6 +640,9 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         if (isOut) {
             if (m.status === 'read') {
                 checkmarkHtml = `<svg class="w-3.5 h-3.5 text-[#53bdeb] ml-1" fill="currentColor" viewBox="0 0 16 16"><path d="M12.354 4.354a.5.5 0 0 0-.708-.708L5 10.293 1.854 7.146a.5.5 0 1 0-.708.708l3.5 3.5a.5.5 0 0 0 .708 0l7-7zm-4.5 7.5l-.708-.708 4.5-4.5.708.708-4.5 4.5z"/></svg>`;
+            } else if (m.status === 'pending') {
+                // Ikon jam pasir berkedip halus untuk status pending optimistik
+                checkmarkHtml = `<svg class="w-3 h-3 text-gray-400 ml-1 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
             } else {
                 checkmarkHtml = `<svg class="w-3.5 h-3.5 text-gray-400 ml-1" fill="currentColor" viewBox="0 0 16 16"><path d="M12.354 4.354a.5.5 0 0 0-.708-.708L5 10.293 1.854 7.146a.5.5 0 1 0-.708.708l3.5 3.5a.5.5 0 0 0 .708 0l7-7zm-4.5 7.5l-.708-.708 4.5-4.5.708.708-4.5 4.5z"/></svg>`;
             }
@@ -597,7 +682,7 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         }
     }
 
-    // ─── POLLING OTOMATIS BACKGROUND (SETIAP 3.5 DETIK) ────────────────────────
+    // ─── POLLING OTOMATIS BACKGROUND (SETIAP 2 DETIK) ──────────────────────────
     function pollUpdates() {
         // Segarkan daftar percakapan
         loadConversations(true);
@@ -636,16 +721,20 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         const sendBtn = $('#btn-send-message');
         sendBtn.prop('disabled', true).addClass('opacity-75');
 
-        // Optimistic UI Append
+        // Optimistic UI Append dengan kelas temp-bubble
         const tempId = 'temp-' + Date.now();
         const tempMsg = {
             id: tempId,
             direction: 'out',
             message: message,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: formatCurrentTime(),
             status: 'pending'
         };
-        $('#waweb-messages-container').append(buildMessageBubbleHtml(tempMsg));
+        const tempBubbleHtml = $(buildMessageBubbleHtml(tempMsg))
+            .addClass('temp-bubble')
+            .attr('data-msg-text', message);
+
+        $('#waweb-messages-container').append(tempBubbleHtml);
         scrollToBottom();
 
         input.val('').focus();
@@ -660,26 +749,211 @@ $pageTitle = $data['title'] ?? 'History WA Web';
             },
             dataType: 'json',
             success: function(res) {
-                isSending = false;
-                sendBtn.prop('disabled', false).removeClass('opacity-75');
                 if (res.status === 'success') {
-                    // Refresh pesan untuk mendapatkan ID asli dari database
-                    setTimeout(() => {
-                        loadMessages(deviceId, contact, true);
-                    }, 500);
+                    // Segarkan langsung pesan dan daftar percakapan
+                    loadMessages(deviceId, contact, true);
+                    loadConversations(true);
                 } else {
                     Swal.fire({ icon: 'error', title: 'Gagal Kirim!', text: res.message });
                     $(`#msg-row-${tempId}`).remove();
                 }
             },
             error: function() {
-                isSending = false;
-                sendBtn.prop('disabled', false).removeClass('opacity-75');
                 Swal.fire({ icon: 'error', title: 'Error', text: 'Terjadi kesalahan koneksi saat mengirim pesan.' });
                 $(`#msg-row-${tempId}`).remove();
+            },
+            complete: function() {
+                isSending = false;
+                sendBtn.prop('disabled', false).removeClass('opacity-75');
             }
         });
     }
+
+    // ─── HAPUS PESAN TUNGGAL ──────────────────────────────────────────────────
+    window.deleteSingleMessage = function(id) {
+        Swal.fire({
+            title: 'Hapus Pesan?',
+            text: 'Pesan ini akan dihapus dari riwayat.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonText: 'Batal',
+            confirmButtonText: 'Ya, Hapus'
+        }).then(result => {
+            if (!result.isConfirmed) return;
+
+            $.ajax({
+                url: BASEURL + '/historywaweb/deleteMessage',
+                type: 'POST',
+                data: { id: id },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.status === 'success') {
+                        $(`#msg-row-${id}`).fadeOut(200, function() { $(this).remove(); });
+                    } else {
+                        Swal.fire('Gagal', res.message, 'error');
+                    }
+                }
+            });
+        });
+    };
+
+    // ─── HAPUS SELURUH PERCAKAPAN ─────────────────────────────────────────────
+    $('#btn-delete-conversation').on('click', function() {
+        if (!activeConversation) return;
+
+        Swal.fire({
+            title: 'Hapus Seluruh Percakapan?',
+            text: `Semua riwayat chat dengan ${activeConversation.contact_display} akan dihapus secara permanen.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonText: 'Batal',
+            confirmButtonText: 'Ya, Hapus Semua'
+        }).then(result => {
+            if (!result.isConfirmed) return;
+
+            $.ajax({
+                url: BASEURL + '/historywaweb/deleteConversation',
+                type: 'POST',
+                data: {
+                    device_id: activeConversation.device_id,
+                    contact: activeConversation.contact_phone
+                },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.status === 'success') {
+                        Swal.fire({ icon: 'success', title: 'Terhapus!', text: res.message, timer: 1200, showConfirmButton: false });
+                        activeConversation = null;
+                        $('#waweb-chat-screen').addClass('hidden').removeClass('flex');
+                        $('#waweb-empty-state').removeClass('hidden');
+                        loadConversations();
+                    } else {
+                        Swal.fire('Gagal', res.message, 'error');
+                    }
+                }
+            });
+        });
+    });
+
+    // ─── EVENT HANDLERS & NAVIGATION ──────────────────────────────────────────
+    // Klik Kontak dari Daftar
+    $(document).on('click', '.chat-contact-item', function(e) {
+        e.preventDefault();
+        const item = $(this);
+        const deviceId    = parseInt(item.attr('data-device-id')) || 0;
+        const contact     = String(item.attr('data-contact') || '').trim();
+        const display     = String(item.attr('data-display') || contact).trim();
+        const devName     = String(item.attr('data-device-name') || '').trim();
+        const devPhone    = String(item.attr('data-device-phone') || '').trim();
+        const avatarColor = String(item.attr('data-avatar-color') || 'bg-emerald-600').trim();
+        const avatarText  = String(item.attr('data-avatar-text') || '').trim();
+
+        if (!contact) return;
+        openConversation(deviceId, contact, display, devName, devPhone, avatarColor, avatarText);
+    });
+
+    // Tombol Back di Mobile
+    $('#btn-back-to-list').on('click', function() {
+        $('#waweb-right-pane').addClass('hidden md:flex');
+        $('#waweb-left-pane').removeClass('hidden');
+    });
+
+    // Filter Device Change
+    $('#waweb-device-filter').on('change', function() {
+        const label = $(this).find('option:selected').text().trim();
+        $('#label-active-device').text(label.replace(/^[🟢🔴🌐]\s*/, ''));
+        loadConversations();
+    });
+
+    // Filter Pills Change (Semua, Masuk, Belum Dibaca)
+    $('.waweb-filter-pill').on('click', function() {
+        $('.waweb-filter-pill').removeClass('bg-emerald-100 text-emerald-800').addClass('bg-gray-100 text-gray-600');
+        $(this).removeClass('bg-gray-100 text-gray-600').addClass('bg-emerald-100 text-emerald-800');
+        currentFilter = $(this).data('filter');
+        renderConversationsList();
+    });
+
+    // Search Input Typing
+    $('#waweb-search-input').on('input', function() {
+        const val = $(this).val().trim();
+        if (val) {
+            $('#btn-clear-search').removeClass('hidden');
+        } else {
+            $('#btn-clear-search').addClass('hidden');
+        }
+        renderConversationsList();
+    });
+
+    // Clear Search Button
+    $('#btn-clear-search').on('click', function() {
+        $('#waweb-search-input').val('');
+        $(this).addClass('hidden');
+        renderConversationsList();
+    });
+
+    // Manual Reload
+    $('#btn-manual-reload, #btn-refresh-chat').on('click', function() {
+        loadConversations();
+        if (activeConversation) {
+            loadMessages(activeConversation.device_id, activeConversation.contact_phone, false);
+        }
+    });
+
+    // Copy Phone Number
+    $('#btn-copy-phone').on('click', function() {
+        if (!activeConversation) return;
+        const clean = activeConversation.contact_phone.replace(/[^0-9]/g, '');
+        navigator.clipboard.writeText(clean).then(() => {
+            Swal.fire({ icon: 'success', title: 'Tersalin!', text: 'Nomor WhatsApp berhasil disalin ke clipboard.', timer: 1000, showConfirmButton: false });
+        });
+    });
+
+    // ─── UTILITY HELPERS ──────────────────────────────────────────────────────
+    function scrollToBottom() {
+        const el = document.getElementById('waweb-messages-container');
+        if (el) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function formatWhatsAppText(text) {
+        if (!text) return '';
+        let escaped = escapeHtml(text);
+
+        // Convert URLs to clickable links
+        escaped = escaped.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-emerald-700 underline hover:text-emerald-900 break-all">$1</a>');
+
+        // Convert *bold*
+        escaped = escaped.replace(/\*([^\*]+)\*/g, '<strong class="font-bold">$1</strong>');
+
+        // Convert _italic_
+        escaped = escaped.replace(/_([^_]+)_/g, '<em class="italic">$1</em>');
+
+        // Convert ~strike~
+        escaped = escaped.replace(/~([^~]+)~/g, '<del class="line-through">$1</del>');
+
+        // Convert ```monospace```
+        escaped = escaped.replace(/```([^`]+)```/g, '<code class="bg-black/5 px-1 py-0.5 rounded font-mono text-[11px]">$1</code>');
+
+        return escaped;
+    }
+
+    // Jalankan inisialisasi
+    initWaWeb();
+
+})();
+</script>
 
     // ─── HAPUS PESAN TUNGGAL ──────────────────────────────────────────────────
     window.deleteSingleMessage = function(id) {

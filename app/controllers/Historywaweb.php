@@ -143,10 +143,8 @@ class Historywaweb extends Controller {
             return;
         }
 
-        // Tandai pesan sebagai sudah dibaca jika bukan request polling after_id
-        if ($afterId === 0) {
-            $model->markAsRead($userId, $deviceId, $contact);
-        }
+        // Tandai pesan sebagai sudah dibaca karena kontak sedang dibuka dan dilihat user
+        $model->markAsRead($userId, $deviceId, $contact);
 
         $device = ($deviceId > 0) ? $model->getDeviceById($deviceId, $userId) : null;
         $rawMessages = $model->getMessages($userId, $deviceId, $contact, 200, $afterId);
