@@ -76,33 +76,49 @@ class Aiserver extends Controller {
             }
         }
 
+        // Deduplikasi input jika ada key yang sama di textarea
+        $keys = array_values(array_unique($keys));
+
         if (empty($keys)) {
             echo json_encode(['status' => 'error', 'message' => 'Tidak ada API Key yang valid!']);
             return;
         }
 
-        // Hitung server yang sudah ada untuk penomoran default
+        // Ambil server yang sudah ada untuk penomoran dan validasi duplikasi
         $existingServers = $this->model('AiServer_model')->getAllByUser($this->getVisibleUserIdsString());
         $currentCount    = count($existingServers);
 
+        // Map key yang sudah ada agar tidak disimpan berulang kali
+        $existingKeyMap = [];
+        foreach ($existingServers as $es) {
+            $existingKeyMap[trim($es['api_key'])] = $es['label'];
+        }
+
         $inserted   = 0;
+        $skipped    = 0;
         $firstLabel = '';
         foreach ($keys as $idx => $key) {
-            $num = $currentCount + $idx + 1;
+            // Cek apakah key sudah pernah tersimpan sebelumnya
+            if (isset($existingKeyMap[$key])) {
+                $skipped++;
+                continue;
+            }
+
+            $num = $currentCount + $inserted + 1;
 
             if (!empty($rawLabel)) {
                 // Jika user mengisi custom label
                 if (count($keys) === 1) {
                     $itemLabel = $rawLabel;
                 } else {
-                    $itemLabel = $rawLabel . ' ' . ($idx + 1);
+                    $itemLabel = $rawLabel . ' ' . ($inserted + 1);
                 }
             } else {
                 // Default nama otomatis
                 $itemLabel = 'Groq Key ' . $num;
             }
 
-            if ($idx === 0) $firstLabel = $itemLabel;
+            if ($inserted === 0) $firstLabel = $itemLabel;
 
             $data = [
                 'user_id'   => $_SESSION['user_id'],
@@ -115,16 +131,24 @@ class Aiserver extends Controller {
 
             if ($this->model('AiServer_model')->addServer($data) > 0) {
                 $inserted++;
+                $existingKeyMap[$key] = $itemLabel;
             }
         }
 
         if ($inserted > 0) {
-            $msg = (count($keys) > 1) 
+            $msg = ($inserted > 1) 
                 ? "$inserted API Key berhasil ditambahkan!" 
                 : "Server AI ($firstLabel) berhasil ditambahkan!";
+            if ($skipped > 0) {
+                $msg .= " ($skipped API Key duplikat dilewati)";
+            }
             echo json_encode(['status' => 'success', 'message' => $msg]);
         } else {
-            echo json_encode(['status' => 'error', 'message' => 'Gagal menambahkan server AI!']);
+            if ($skipped > 0) {
+                echo json_encode(['status' => 'error', 'message' => 'API Key ini sudah pernah disimpan sebelumnya (duplikat)!']);
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Gagal menambahkan server AI!']);
+            }
         }
     }
 
@@ -147,6 +171,13 @@ class Aiserver extends Controller {
 
         if (empty($apiKey)) {
             echo json_encode(['status' => 'error', 'message' => 'API Key wajib diisi!']);
+            return;
+        }
+
+        // Cek duplikasi API Key pada server lain
+        $duplicate = $this->model('AiServer_model')->isKeyExists($apiKey, $this->getVisibleUserIdsString(), $id);
+        if ($duplicate) {
+            echo json_encode(['status' => 'error', 'message' => 'API Key ini sudah digunakan oleh server (' . ($duplicate['label'] ?? 'lain') . ')!']);
             return;
         }
 
@@ -228,6 +259,12 @@ class Aiserver extends Controller {
             return;
         }
 
+        // Cek duplikasi Model ID
+        if ($this->model('AiServer_model')->isModelExists($data['model_name'], $this->getVisibleUserIdsString())) {
+            echo json_encode(['status' => 'error', 'message' => 'Model ID (' . $data['model_name'] . ') sudah terdaftar!']);
+            return;
+        }
+
         if ($this->model('AiServer_model')->addModel($data) > 0) {
             echo json_encode(['status' => 'success', 'message' => 'Model AI berhasil ditambahkan!']);
         } else {
@@ -250,6 +287,12 @@ class Aiserver extends Controller {
 
         if (empty($data['label']) || empty($data['model_name'])) {
             echo json_encode(['status' => 'error', 'message' => 'Label dan Model ID wajib diisi!']);
+            return;
+        }
+
+        // Cek duplikasi Model ID pada model lain
+        if ($this->model('AiServer_model')->isModelExists($data['model_name'], $this->getVisibleUserIdsString(), $id)) {
+            echo json_encode(['status' => 'error', 'message' => 'Model ID (' . $data['model_name'] . ') sudah digunakan oleh model lain!']);
             return;
         }
 

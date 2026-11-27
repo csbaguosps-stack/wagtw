@@ -759,9 +759,16 @@ function filterServerList() {
 }
 
 function openAddModal() {
+    isSubmittingKey = false;
     document.getElementById('form-key').reset();
     document.getElementById('key-id').value = '';
     document.getElementById('modal-key-title').textContent = 'Tambah API Key';
+    const btn = document.getElementById('btn-save-key');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Simpan Key';
+        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+    }
     
     // Otomatis isi nama default
     const defaultLabel = getNextKeyDefaultLabel();
@@ -782,6 +789,13 @@ function openAddModal() {
 }
 
 function openEditModal(id) {
+    isSubmittingKey = false;
+    const btn = document.getElementById('btn-save-key');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Simpan Perubahan';
+        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+    }
     fetch(BASEURL + '/aiserver/getServer?id=' + id)
         .then(r => r.json())
         .then(res => {
@@ -805,8 +819,21 @@ function openEditModal(id) {
         });
 }
 
+let isSubmittingKey = false;
 $(document).off('submit', '#form-key').on('submit', '#form-key', function(e) {
     e.preventDefault();
+    if (isSubmittingKey) return;
+
+    const btn = document.getElementById('btn-save-key');
+    const originalText = btn ? btn.innerHTML : 'Simpan Key';
+    isSubmittingKey = true;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="inline-flex items-center justify-center gap-2"><svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Menyimpan...</span>`;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+    }
+
     const fd = new FormData(this);
     const url = fd.get('id') ? '/aiserver/edit' : '/aiserver/add';
     
@@ -819,6 +846,17 @@ $(document).off('submit', '#form-key').on('submit', '#form-key', function(e) {
                 window.reloadCurrentPage();
             } else {
                 Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
+        })
+        .catch(err => {
+            Swal.fire({ icon: 'error', title: 'Error!', text: 'Terjadi kesalahan sistem saat menyimpan.' });
+        })
+        .finally(() => {
+            isSubmittingKey = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
             }
         });
 });
@@ -927,13 +965,27 @@ function testApiKey(id, apiKey, label, modelName) {
 
 // ─── AI Models Actions ────────────────────────────────────────────────────────
 function openAddModelModal() {
+    isSubmittingModel = false;
     document.getElementById('form-model').reset();
     document.getElementById('model-id').value = '';
     document.getElementById('modal-model-title').textContent = 'Tambah AI Model';
+    const btn = document.getElementById('btn-save-model');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Simpan Model';
+        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+    }
     document.getElementById('modal-model').classList.remove('hidden');
 }
 
 function openEditModelModal(id) {
+    isSubmittingModel = false;
+    const btn = document.getElementById('btn-save-model');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Simpan Perubahan';
+        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+    }
     fetch(BASEURL + '/aiserver/getModel?id=' + id)
         .then(r => r.json())
         .then(res => {
@@ -949,8 +1001,21 @@ function openEditModelModal(id) {
         });
 }
 
+let isSubmittingModel = false;
 $(document).off('submit', '#form-model').on('submit', '#form-model', function(e) {
     e.preventDefault();
+    if (isSubmittingModel) return;
+
+    const btn = document.getElementById('btn-save-model');
+    const originalText = btn ? btn.innerHTML : 'Simpan Model';
+    isSubmittingModel = true;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="inline-flex items-center justify-center gap-2"><svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Menyimpan...</span>`;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+    }
+
     const fd = new FormData(this);
     const url = fd.get('id') ? '/aiserver/editModel' : '/aiserver/addModel';
     
@@ -963,6 +1028,17 @@ $(document).off('submit', '#form-model').on('submit', '#form-model', function(e)
                 window.reloadCurrentPage();
             } else {
                 Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
+        })
+        .catch(err => {
+            Swal.fire({ icon: 'error', title: 'Error!', text: 'Terjadi kesalahan sistem saat menyimpan model.' });
+        })
+        .finally(() => {
+            isSubmittingModel = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
             }
         });
 });
@@ -1040,8 +1116,20 @@ function openEditSearchModal(id) {
         });
 }
 
+let isSubmittingSearch = false;
 $(document).off('submit', '#form-search').on('submit', '#form-search', function(e) {
     e.preventDefault();
+    if (isSubmittingSearch) return;
+
+    const btn = document.getElementById('btn-save-search') || e.target.querySelector('button[type="submit"]');
+    const originalText = btn ? btn.innerHTML : 'Simpan';
+    isSubmittingSearch = true;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+    }
+
     const fd = new FormData(this);
     const url = fd.get('id') ? '/aiserver/editSearch' : '/aiserver/addSearch';
     
@@ -1054,6 +1142,17 @@ $(document).off('submit', '#form-search').on('submit', '#form-search', function(
                 window.reloadCurrentPage();
             } else {
                 Swal.fire({ icon: 'error', title: 'Gagal!', text: res.message });
+            }
+        })
+        .catch(err => {
+            Swal.fire({ icon: 'error', title: 'Error!', text: 'Terjadi kesalahan sistem.' });
+        })
+        .finally(() => {
+            isSubmittingSearch = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
             }
         });
 });

@@ -78,6 +78,21 @@ class AiServer_model {
         return $this->db->rowCount();
     }
 
+    public function isKeyExists($apiKey, $userId, $excludeId = 0)
+    {
+        $sql = "SELECT id, label FROM ai_servers WHERE api_key = :api_key AND user_id IN ($userId)";
+        if ($excludeId > 0) {
+            $sql .= " AND id != :exclude_id";
+        }
+        $sql .= " LIMIT 1";
+        $this->db->query($sql);
+        $this->db->bind('api_key', trim($apiKey));
+        if ($excludeId > 0) {
+            $this->db->bind('exclude_id', $excludeId);
+        }
+        return $this->db->single();
+    }
+
     // ─── Device AI Settings ───────────────────────────────────────────────────
 
     public function getDeviceSettings($deviceId, $userId)
@@ -185,6 +200,21 @@ class AiServer_model {
         $this->db->bind('id',      $id);
         $this->db->execute();
         return $this->db->rowCount();
+    }
+
+    public function isModelExists($modelName, $userId, $excludeId = 0)
+    {
+        $sql = "SELECT id, label FROM ai_models WHERE model_name = :model_name AND user_id IN ($userId)";
+        if ($excludeId > 0) {
+            $sql .= " AND id != :exclude_id";
+        }
+        $sql .= " LIMIT 1";
+        $this->db->query($sql);
+        $this->db->bind('model_name', trim($modelName));
+        if ($excludeId > 0) {
+            $this->db->bind('exclude_id', $excludeId);
+        }
+        return $this->db->single();
     }
 
     // ─── AI Search Engines CRUD ───────────────────────────────────────────────
