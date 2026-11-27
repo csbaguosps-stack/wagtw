@@ -931,20 +931,32 @@ $pageTitle = $data['title'] ?? 'History WA Web';
         if (!text) return '';
         let escaped = escapeHtml(text);
 
-        // Convert URLs to clickable links
-        escaped = escaped.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-emerald-700 underline hover:text-emerald-900 break-all">$1</a>');
+        // 1. Simpan URL ke token khusus bebas karakter markdown agar tidak tertabrak regex (*, _, ~)
+        const urlTokens = [];
+        escaped = escaped.replace(/(https?:\/\/[^\s<]+)/g, function(match) {
+            const token = '@@@WAURLTOKEN' + urlTokens.length + '@@@';
+            urlTokens.push(match);
+            return token;
+        });
 
-        // Convert *bold*
-        escaped = escaped.replace(/\*([^\*]+)\*/g, '<strong class="font-bold">$1</strong>');
-
-        // Convert _italic_
-        escaped = escaped.replace(/_([^_]+)_/g, '<em class="italic">$1</em>');
-
-        // Convert ~strike~
-        escaped = escaped.replace(/~([^~]+)~/g, '<del class="line-through">$1</del>');
-
-        // Convert ```monospace```
+        // 2. Monospace ```kode```
         escaped = escaped.replace(/```([^`]+)```/g, '<code class="bg-black/5 px-1 py-0.5 rounded font-mono text-[11px]">$1</code>');
+
+        // 3. Bold *teks* (support nested di dalam _* atau ~*)
+        escaped = escaped.replace(/(^|[\s\(\[\{>_~*])\*([^\s\*].*?[^\s\*]|\S)\*(?=[\s\)\]\}<.,!?:;_~*]|$)/g, '$1<strong class="font-bold">$2</strong>');
+
+        // 4. Italic _teks_ (support nested di dalam *_ atau ~_)
+        escaped = escaped.replace(/(^|[\s\(\[\{>*~_])_([^\s_].*?[^\s_]|\S)_(?=[\s\)\]\}<.,!?:;*~_]|$)/g, '$1<em class="italic">$2</em>');
+
+        // 5. Strike ~teks~
+        escaped = escaped.replace(/(^|[\s\(\[\{>*_~])~([^\s~].*?[^\s~]|\S)~(?=[\s\)\]\}<.,!?:;*_~]|$)/g, '$1<del class="line-through">$2</del>');
+
+        // 6. Kembalikan URL tokens menjadi elemen <a> asli WhatsApp Web
+        urlTokens.forEach((url, i) => {
+            const token = '@@@WAURLTOKEN' + i + '@@@';
+            const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-emerald-700 underline hover:text-emerald-900 break-all">${url}</a>`;
+            escaped = escaped.split(token).join(linkHtml);
+        });
 
         return escaped;
     }
