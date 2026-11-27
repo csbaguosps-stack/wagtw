@@ -843,30 +843,25 @@ async function cleanupExpiredMutedContacts() {
 
 /**
  * Deteksi apakah teks pesan adalah template bawaan iklan Meta / pertanyaan promo & lokasi
- * (Contoh: "Saya Mau Cek Mata Gratis !!", "Lok dimana ya", "Paket kacamata 75K")
  */
 function isAdLeadContent(text) {
     if (!text || typeof text !== 'string') return false;
     const clean = text.trim().toLowerCase();
 
-    // 1. Template bawaan tombol Iklan Meta (Winsee Optik)
+    // 1. Template bawaan tombol Iklan Meta / lead iklan
     const adTemplates = [
-        'cek mata gratis', 'cek mata', 'periksa mata gratis', 'tes mata gratis',
-        'paket kacamata', 'paket kacamata 75k', '75k', 'promo kacamata',
-        'frame dan lensa gratis', 'lensa gratis', 'frame gratis',
-        'promo optik', 'koleksi optik', 'diskon optik',
-        'mau kacamata', 'beli kacamata', 'pesan kacamata', 'gratis lensa',
-        'optik', 'winsee', 'halo optik', 'halo winsee', 'mau tanya'
+        'saya tertarik dengan iklan', 'iklan facebook', 'iklan instagram',
+        'info promo', 'promo', 'diskon', 'mau tanya', 'halo mau tanya',
+        'bisa minta info', 'info produk', 'info paket'
     ];
     if (adTemplates.some(tpl => clean.includes(tpl))) return true;
 
-    // 2. Pertanyaan lokasi / cabang toko optik yang sering ditanyakan pelanggan iklan
+    // 2. Pertanyaan lokasi / cabang toko yang sering ditanyakan pelanggan iklan
     const locationKeywords = [
         'lok dimana', 'lok dimana ya', 'lokasi dimana', 'lokasi di mana', 'alamat dimana',
         'alamat di mana', 'posisi dimana', 'ada di mana', 'ada dimana', 'daerah mana',
-        'cabang dimana', 'cabang di mana', 'optik nya dimana', 'optiknya dimana', 'tokonya dimana',
-        'di mn', 'dmn', 'dimn', 'optiknya', 'optik nya', 'margonda', 'depok', 'bogor',
-        'buka jam', 'jam buka', 'jam operasional'
+        'cabang dimana', 'cabang di mana', 'tokonya dimana', 'toko dimana',
+        'di mn', 'dmn', 'dimn', 'buka jam', 'jam buka', 'jam operasional'
     ];
     if (locationKeywords.some(kw => clean.includes(kw))) return true;
 
@@ -1016,8 +1011,8 @@ function isChatAdminTrigger(text) {
         'harga', 'berapa', 'biaya', 'ongkir', 'tarif', 'price',
         'promo', 'diskon', 'discount', 'voucher', 'potongan', 'gratis', 'free',
         'jam buka', 'buka jam', 'tutup jam', 'operasional', 'jadwal',
-        'kacamata', 'frame', 'lensa', 'minus', 'plus', 'silinder', 'cylinder',
-        'periksa', 'cek mata', 'resep', 'optik', 'garansi', 'model', 'katalog',
+        'produk', 'layanan', 'paket', 'fitur', 'spesifikasi', 'cara', 'syarat',
+        'order', 'pesan', 'beli', 'pembayaran', 'garansi', 'model', 'katalog',
         'bisa', 'apakah', 'ada', 'ready', 'stok', 'stock'
     ];
     const hasInquiry = inquiryKeywords.some(kw => normalized.includes(kw));
@@ -1474,11 +1469,11 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
                         const inquiryKeywords = [
                             'dimana', 'di mana', 'lokasi', 'alamat', 'cabang', 'toko',
                             'harga', 'berapa', 'biaya', 'ongkir', 'tarif', 'price',
-                            'promo', 'diskon', 'voucher', 'potongan', 'gratis', 'free',
+                            'promo', 'diskon', 'discount', 'voucher', 'potongan', 'gratis', 'free',
                             'jam buka', 'buka jam', 'tutup jam', 'operasional', 'jadwal',
-                            'kacamata', 'frame', 'lensa', 'minus', 'plus', 'silinder',
-                            'periksa', 'cek mata', 'resep', 'optik', 'bisa', 'apakah', 'ada',
-                            'lok dimana', 'lokasi optik', 'alamat optik'
+                            'produk', 'layanan', 'paket', 'fitur', 'spesifikasi', 'cara', 'syarat',
+                            'order', 'pesan', 'beli', 'pembayaran', 'garansi', 'katalog',
+                            'bisa', 'apakah', 'ada', 'ready', 'stok', 'stock'
                         ];
                         const cleanLower = incomingText.trim().toLowerCase();
                         const isAskingQuestion = inquiryKeywords.some(kw => cleanLower.includes(kw));
@@ -1710,13 +1705,9 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
 5. Gunakan cetak tebal WhatsApp (*kata*) untuk menonjolkan judul poin atau istilah penting.
 6. Berikan jeda 1 baris kosong antar poin atau paragraf agar teks tidak menumpuk rapat.
 7. Jawab secara lengkap, jelas, dan tuntas sampai selesai.
-8. FORMAT NOMOR TELEPON/WHATSAPP: Jika memberikan nomor telepon atau kontak WhatsApp, WAJIB tuliskan dalam format tautan/link yang BISA LANGSUNG DIKLIK oleh pelanggan di WhatsApp, yaitu https://wa.me/628xxx (contoh: 'Telp/WA: https://wa.me/6285129868954'). Dilarang memecah angka telepon dengan spasi atau karakter aneh agar link tetap utuh dan bisa langsung diklik.`;
+8. FORMAT NOMOR TELEPON/WHATSAPP: Jika memberikan nomor telepon atau kontak WhatsApp, WAJIB tuliskan dalam format tautan/link yang BISA LANGSUNG DIKLIK oleh pelanggan di WhatsApp, yaitu https://wa.me/628xxx (contoh: 'Telp/WA: https://wa.me/6281234567890'). Dilarang memecah angka telepon dengan spasi atau karakter aneh agar link tetap utuh dan bisa langsung diklik.`;
 
-            sysPrompt = sysPrompt + "\n" + waFormatRules;
-
-            if (isFromMetaAd) {
-                sysPrompt += `\n[CATATAN PELANGGAN DARI IKLAN META]: Pelanggan ini masuk dari iklan promosi. Langsung respon to the point sesuai Rules (prioritaskan info promo 75k/150k atau outlet sesuai yang ditanyakan, dilarang mengarang informasi).`;
-            }
+            sysPrompt = sysPrompt + "\n\n" + waFormatRules;
 
             // ── Inject Tanggal & Jam WIB ───────────────────────────────────────
             const wibOffset = 7 * 60; // WIB = UTC+7
@@ -1739,34 +1730,28 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
 
 ` + sysPrompt;
 
-            // ── Inject Knowledge Base / Data AI milik device ini jika ada ───────────
+            // ── Inject Knowledge Base / Data AI milik device ini (masing-masing nomor independen) ──
+            let hasDeviceData = false;
             try {
-                let kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE device_id = ? ORDER BY id ASC', [deviceId]);
-                if (!kbRows || kbRows.length === 0) {
-                    kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE user_id = ? ORDER BY id ASC', [userId]);
-                }
+                const kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE device_id = ? ORDER BY id ASC', [deviceId]);
                 if (kbRows && kbRows.length > 0) {
+                    hasDeviceData = true;
                     const kbText = kbRows.map(k => `### ${k.title}:\n${k.content}`).join('\n\n');
-                    sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ BISNIS TOKO (AI DATA LIST - SUMBER KEBENARAN UTAMA)]:\n` + kbText;
+                    sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ (AI DATA LIST PERANGKAT INI)]:\n` + kbText;
                 }
             } catch (kbErr) {
                 console.warn('[AI] Gagal membaca data knowledge base device:', kbErr.message);
             }
 
-            // ── PENEGASAN KEPATUHAN MUTLAK TERHADAP RULES & DATA AI ──────────────
-            sysPrompt += `\n\n[PERINTAH MUTLAK (WAJIB DIIKUTI SESUAI RULES & DATA)]:
-1. Jawaban kamu WAJIB 100% mengikuti ATURAN (Rules / System Prompt) dan DATA (AI Data List) di atas.
-2. DILARANG KERAS MENGARANG (halusinasi) informasi, harga, promo, stock, outlet, nomor telepon, atau syarat yang tidak tertulis di data toko.
-3. DILARANG SELALU MEMBUKA/MENGAWALI CHAT DENGAN "Halo kak 😊", "Halo kak", "Halo!", atau sapaan template serupa. Langsung jawab ke inti pertanyaan customer secara to the point.
-4. Jika customer membahas promo murah / 75k / 150k: WAJIB ikuti aturan PAKET PROMO 75K & 150K (prioritaskan link Shopee https://shopee.co.id/winseeofficial/, lensa clear, SPH 0.00 s/d -6.00, CYL max -2.00, dan tegaskan stok store offline terbatas & wajib dicek dulu).
-5. Jika customer bertanya "dimana" / lokasi outlet: Ikuti aturan OUTLET (arahkan ke https://winseeoptik.com/toko atau tanyakan kota/area customer, jangan tampilkan semua outlet sekaligus tanpa alasan).
-6. Selalu pertahankan konteks percakapan dan akhiri dengan pertanyaan ramah yang relevan untuk mengarahkan customer.`;
+            // ── PENEGASAN KEPATUHAN MUTLAK: 100% SESUAI RULES & DATA MASING-MASING NOMOR ──
+            sysPrompt += `\n\n[PERINTAH MUTLAK (WAJIB DIIKUTI)]:
+1. Kamu WAJIB menjawab 100% HANYA berdasarkan ATURAN (Rules / System Prompt) dan DATA (AI Data List) dari nomor perangkat ini di atas.
+2. DILARANG KERAS MENGARANG (halusinasi) informasi, harga, promo, stock, outlet, nomor telepon, atau data apapun yang tidak tertulis di Rules atau Data AI nomor ini.
+3. Selalu patuhi seluruh aturan gaya bahasa, pembuka/penutup chat, dan larangan yang telah diatur pada Rules nomor ini.`;
 
             // ── Web Search Integration ─────────────────────────────────────────
-            // Jangan jalankan web search jika pertanyaan seputar info toko internal (lokasi, alamat, cabang, harga, promo, jam operasional)
-            // agar data resmi toko dari Knowledge Base tidak tertimpa oleh pencarian web publik
-            const isInternalStoreQuery = /(lokasi|alamat|cabang|toko|di mana|dimana|jam buka|operasional|paket|promo|75k|harga|biaya|cek mata|kacamata|optik|winsee)/i.test(incomingText);
-            if (searchEnabled && !isInternalStoreQuery && needsWebSearch(incomingText)) {
+            // Jika device memiliki AI Data List sendiri, utamakan data internal perangkat dan hindari pencarian web acak
+            if (searchEnabled && !hasDeviceData && needsWebSearch(incomingText)) {
                 console.log(`[Search] Pertanyaan memerlukan info terkini, menjalankan web search...`);
                 try {
                     const searchEngines = await dbQuery(
@@ -1998,7 +1983,7 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 if (!fallbackSent) {
                     const friendlyFallback = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
                         ? aiConfig.ai_handoff_text.trim()
-                        : "Halo kak! Terima kasih telah menghubungi *Winsee Optik* 😊\nPesan kakak sudah kami terima. Ada yang bisa kami bantu seputar kacamata, periksa mata gratis, atau lokasi cabang toko kami?";
+                        : "Halo kak! Terima kasih telah menghubungi kami 😊\nPesan kakak sudah kami terima. Mohon ditunggu ya, tim kami akan segera merespons.";
                     try {
                         const sentMsg = await sock.sendMessage(senderJid, { text: friendlyFallback }, { quoted: fullMsg });
                         const waMsgId = sentMsg?.key?.id || null;
@@ -2433,9 +2418,9 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
                         continue;
                     }
 
-                    // 4. Periksa apakah ini pesan greeting promosi iklan (seperti "Halo Optik winsee punya paket kacamata 75K...")
-                    if (lowerText.includes('halo optik winsee') || lowerText.includes('paket kacamata 75k') || lowerText.includes('cek koleksinya') || lowerText.includes('cek mata gratis')) {
-                        console.log(`[ADMIN MESSAGE IGNORED] Pesan promosi pembuka iklan terdeteksi. Jangan mute Bot AI.`);
+                    // 4. Periksa apakah pesan ini adalah pesan promosi / CTA Iklan
+                    if (isMetaAdMessage(msg) || isAdLeadContent(incomingText)) {
+                        console.log(`[ADMIN MESSAGE IGNORED] Pesan promosi / CTA Iklan terdeteksi. Jangan mute Bot AI.`);
                         continue;
                     }
 
