@@ -1,6 +1,6 @@
 # 🚀 WAGTW - WhatsApp Multi-Device Gateway & AI Marketing Platform
 
-![Version](https://img.shields.io/badge/Version-3.0.0-emerald?style=flat-square)
+![Version](https://img.shields.io/badge/Version-3.1.0-emerald?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%20|%208.0%20|%208.1%20|%208.2-blue?style=flat-square)
 ![Node.js](https://img.shields.io/badge/Node.js-20.x%20|%2022.x%20(Recommended)-green?style=flat-square)
 ![Baileys](https://img.shields.io/badge/Engine-Baileys%20v7%20(Pure%20WebSocket)-purple?style=flat-square)
@@ -12,7 +12,53 @@
   <img src="assets/img/dashboard.png" alt="WAGTW Dashboard" width="100%">
 </p>
 
-**WAGTW** is a modern, enterprise-grade WhatsApp Gateway and marketing automation platform built with **PHP MVC (Native)** and **Node.js Baileys Engine v7 (pure WebSocket without Chromium/Puppeteer overhead)**. It is extremely lightweight, CPU/RAM efficient, stable, and battle-tested for multi-device management, high-volume broadcasting, intelligent auto-replies, and AI integration (Groq Llama 3) with real-time web search capabilities.
+**WAGTW** is a modern, enterprise-grade WhatsApp Gateway and marketing automation platform built with **PHP MVC (Native)** and **Node.js Baileys Engine v7 (pure WebSocket without Chromium/Puppeteer overhead)**. It is extremely lightweight, CPU/RAM efficient, stable, and battle-tested for multi-device management, high-volume broadcasting, intelligent auto-replies, and AI integration (Groq Llama 3 & GPT-OSS) with real-time web search capabilities.
+
+---
+
+## 🚀 Changelog & Recent Fixes (v3.1.0 Update)
+
+Dokumentasi pembaruan terbaru untuk stabilitas, arsitektur multi-device, dan performa engine AI:
+
+### 1. 🤖 Pure Multi-Device AI Isolation (Device-Agnostic Engine)
+- **Aturan & Data 100% Dinamis per Nomor**:
+  - Seluruh aturan hardcode bisnis/toko, link, dan promo telah **dihapus total** dari `server.js`.
+  - Core engine kini 100% *device-agnostic* & netral. Setiap nomor WhatsApp (`device_id`) memiliki data dan instruksi yang terisolasi secara mandiri:
+    - **Rules / System Prompt**: Dikonfigurasi per nomor via tombol **AI ON/OFF** (`device_ai_settings WHERE device_id = ?`).
+    - **Knowledge Base & FAQ**: Dikelola per nomor via tombol **Data** (`device_ai_data WHERE device_id = ?`).
+  - Tidak ada lagi pencampuran atau kebocoran data antar-nomor yang berbeda.
+- **Kepatuhan Mutlak & Anti-Halusinasi (*Zero Hallucination*)**:
+  - LLM diinstruksikan secara tegas untuk 100% hanya menjawab berdasarkan Rules dan Data List nomor tersebut tanpa mengarang informasi harga, promo, atau lokasi.
+  - Parameter `temperature` diatur ke `0.1` pada `groq.js` untuk menghasilkan jawaban yang deterministik, faktual, dan patuh aturan.
+
+### 2. 🧠 Preservasi Knowledge Base & Anti-Truncation
+- **Penghapusan Pemotongan Teks Destruktif**:
+  - Menghapus pembatasan `substring(0, 8000)` pada prompt AI yang sebelumnya memotong Knowledge Base (15.000+ karakter).
+  - Mengimplementasikan kompresi cerdas pada spasi berlebih dan pembatas dekoratif (`===`, `---`, `___`) sehingga seluruh FAQ, daftar cabang, dan katalog masuk secara utuh ke dalam *context window*.
+- **Alokasi Token Output Adaptif**:
+  - Mengganti pemotongan token kaku dengan perhitungan token adaptif (alokasi 250–500 token output). Jawaban AI kini tampil detail, lengkap, tidak terpotong di tengah kalimat, dan tetap aman di bawah limit 8.000 TPM (Token Per Minute) Groq.
+
+### 3. 🔄 Auto-Switch Model AI Aktif & Fallback Model Lama
+- **Pemetaan Otomatis Model Decommissioned**:
+  - Menambahkan kamus pemetaan otomatis (*auto-fallback*) di `groq.js` untuk model-model lama Groq (`llama-3.1-8b-instant`, `llama-3.3-70b-versatile`, dll.) langsung dialihkan ke model resmi aktif (`openai/gpt-oss-20b` dan `openai/gpt-oss-120b`). Mencegah error HTTP 404 (*Model Not Found*).
+- **Manajemen Model AI Dinamis**:
+  - Daftar model di dashboard kini memproses dan menampilkan murni model aktif yang terdaftar di database.
+
+### 4. 📱 Stabilitas Koneksi Perangkat (Anti-Disconnect Permanen)
+- **Proteksi Sesi Aktif WhatsApp**:
+  - Memperbaiki issue di mana membuka menu Devices (`/public/device`) sempat memicu status disconnect atau terlogout.
+  - *Watchdog background* tidak lagi memutus paksa sesi Baileys yang valid dan terhubung, menjaga perangkat online 24/7 tanpa perlu scan QR ulang.
+
+### 5. ⚡ Real-Time SPA Navigation & Auto-Save
+- **Penyimpanan Instan Tanpa Hard Refresh**:
+  - Peningkatan pada handler AJAX SPA di `main.js` sehingga penambahan data perangkat, API Key, Model AI, Rules, dan Data List langsung tersimpan dan ter-render ke tampilan tanpa perlu melakukan hard refresh manual (`Ctrl+F5`).
+  - Penyesuaian header cache CSS & asset untuk menghindari tampilan antarmuka yang tertahan di cache lama.
+
+### 6. 💬 Deteksi Inquiry Cerdas & Hand-off Admin Manusia
+- **Pengenalan Pertanyaan Pelanggan Universal**:
+  - Menggeneralisasi kata kunci pertanyaan (*inquiry*) mencakup harga, lokasi, produk, promo, stok, jam operasional, dan garansi secara universal untuk segala sektor bisnis.
+  - Mencegah bot AI termute secara keliru saat pelanggan bertanya.
+  - Menjeda AI secara otomatis saat staf admin manusia mengetik langsung dari WhatsApp Web atau HP, dan mengaktifkan kembali ketika sesi admin selesai.
 
 ---
 
@@ -270,12 +316,16 @@ pm2 startup
    - Compose the response message. You can enable typing simulation indicator.
 3. Click **Save**.
 
-### 3. Setting Up the AI Smart Assistant
-1. Go to **AI Servers**:
-   - Enter your Groq API Key (free from [console.groq.com](https://console.groq.com)).
-   - Select model (e.g., `llama-3.3-70b-versatile` or `llama-3.1-8b-instant`).
-   - Write your custom business instructions / persona.
-2. Enable **Web Search** if you want the bot to automatically lookup real-time pricing, news, or search results via Google, Bing, or DuckDuckGo.
+### 3. Setting Up the AI Smart Assistant (Per-Device Multi-Tenant)
+1. **Manage Server AI & Models**:
+   - Go to **Server AI** > **Server AI** tab: Enter your Groq API Key(s) (supports multiple keys with automatic rotation and failover).
+   - Go to **Model AI** tab: Manage active models (recommended: `openai/gpt-oss-20b` and `openai/gpt-oss-120b`).
+   - Go to **Server Search** tab: Enable Web Search if you want the bot to look up real-time information via Google, Bing, or DuckDuckGo.
+2. **Configure Rules & Knowledge Base Per Device**:
+   - Go to **Devices**:
+     - Click **AI ON/OFF** on any device to enable AI autoreply and define device-specific **Rules / System Prompt** (business persona, greeting styles, prohibitions).
+     - Click **Data** to manage the **AI Data List** (Knowledge Base / FAQ, store addresses, price lists, policies) specifically for that phone number.
+   - Each device runs completely independently with zero cross-device data bleeding.
 
 ### 4. Sending Broadcast Campaigns with Anti-Ban Protection
 1. Go to **Broadcast** > **Create Broadcast**.
