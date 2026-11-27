@@ -1741,18 +1741,24 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
 
             // ── Inject Knowledge Base / Data AI milik device ini jika ada ───────────
             try {
-                const kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE device_id = ? ORDER BY id ASC', [deviceId]);
+                let kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE device_id = ? ORDER BY id ASC', [deviceId]);
+                if (!kbRows || kbRows.length === 0) {
+                    kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE user_id = ? ORDER BY id ASC', [userId]);
+                }
                 if (kbRows && kbRows.length > 0) {
                     const kbText = kbRows.map(k => `### ${k.title}:\n${k.content}`).join('\n\n');
-                    sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ BISNIS TOKO]:\n` + kbText;
+                    sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ BISNIS TOKO (SUMBER KEBENARAN UTAMA - WAJIB DIIKUTI 100%)]:\n` + kbText;
+                    sysPrompt += `\n\n[INSTRUKSI AKURASI DATA TOKO]:\n1. Semua jawaban seputar lokasi cabang, alamat, jam operasional, promo (paket 75k, fuji, dll.), link maps, dan nomor telepon WAJIB 100% mengikuti DATA PENGETAHUAN & FAQ BISNIS TOKO di atas.\n2. DILARANG KERAS mengarang alamat atau informasi yang tidak tertulis di data toko.`;
                 }
             } catch (kbErr) {
                 console.warn('[AI] Gagal membaca data knowledge base device:', kbErr.message);
             }
 
             // ── Web Search Integration ─────────────────────────────────────────
-
-            if (searchEnabled && needsWebSearch(incomingText)) {
+            // Jangan jalankan web search jika pertanyaan seputar info toko internal (lokasi, alamat, cabang, harga, promo, jam operasional)
+            // agar data resmi toko dari Knowledge Base tidak tertimpa oleh pencarian web publik
+            const isInternalStoreQuery = /(lokasi|alamat|cabang|toko|di mana|dimana|jam buka|operasional|paket|promo|75k|harga|biaya|cek mata|kacamata|optik|winsee)/i.test(incomingText);
+            if (searchEnabled && !isInternalStoreQuery && needsWebSearch(incomingText)) {
                 console.log(`[Search] Pertanyaan memerlukan info terkini, menjalankan web search...`);
                 try {
                     const searchEngines = await dbQuery(

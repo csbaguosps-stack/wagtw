@@ -45,10 +45,18 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 600) 
             ...(Array.isArray(chatHistory) ? chatHistory : [{ role: 'user', content: String(chatHistory) }]),
         ];
 
-        // ── PANGKAS & KOMPRES PAYLOAD DEMI KEAMANAN TOTAL TPM 8.000 & MENCEGAH TEKS TERPOTONG ──
-        // Groq menghitung Total TPM = (Input Tokens) + (max_tokens).
-        // Batas TPM adalah 8.000. Kita targetkan Total TPM <= 7.200 (aman 100% tanpa HTTP 413).
-        // 1 token di bahasa Indonesia + markdown ≈ 2.2 karakter.
+        // ── BERSIHKAN FORMAT PAYLOAD TANPA MEMOTONG DATA PENGETAHUAN TOKO ──
+        // Hapus spasi berlebih dan pembatas dekoratif tanpa menghilangkan satu kata pun data bisnis
+        if (messages[0]?.role === 'system' && messages[0].content) {
+            messages[0].content = messages[0].content
+                .replace(/[ \t]+/g, ' ')
+                .replace(/={4,}/g, '===')
+                .replace(/-{4,}/g, '---')
+                .replace(/_{4,}/g, '___')
+                .replace(/\n\s*\n\s*\n+/g, '\n\n')
+                .trim();
+        }
+
         let totalChars = messages.reduce((acc, m) => acc + (m.content ? m.content.length : 0), 0);
 
         // Jika riwayat chat panjang, prioritaskan 2 pesan paling baru agar konteks input tidak membengkak
@@ -59,22 +67,13 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 600) 
             totalChars = messages.reduce((acc, m) => acc + (m.content ? m.content.length : 0), 0);
         }
 
-        // Jika system prompt sangat besar (> 9.000 karakter), rapikan spasi berlebih
-        if (messages[0]?.role === 'system' && messages[0].content && messages[0].content.length > 8500) {
-            messages[0].content = messages[0].content
-                .replace(/[ \t]+/g, ' ')
-                .replace(/\n{3,}/g, '\n\n')
-                .substring(0, 8000) + '\n\n[Data referensi toko dioptimalkan...]';
-            totalChars = messages.reduce((acc, m) => acc + (m.content ? m.content.length : 0), 0);
-        }
-
-        // Estimasi token input secara konservatif
-        const estimatedInputTokens = Math.ceil(totalChars / 2.2);
+        // Estimasi token input secara akurat (~2.8 karakter per token)
+        const estimatedInputTokens = Math.ceil(totalChars / 2.8);
 
         // Alokasikan max_tokens yang optimal:
-        // Cukup besar (500 - 650 tokens) agar teks TIDAK TERPOTONG dan sangat detail,
-        // namun tetap di bawah sisa kuota (7.200 - estimatedInputTokens) agar tidak pernah 413.
-        const maxAllowedTokens = Math.max(350, Math.min(650, 7200 - estimatedInputTokens));
+        // Cukup besar (400 - 550 tokens) agar teks TIDAK TERPOTONG dan sangat detail,
+        // namun tetap di bawah sisa kuota (7.500 - estimatedInputTokens) agar tidak pernah 413.
+        const maxAllowedTokens = Math.max(250, Math.min(500, 7500 - estimatedInputTokens));
         const effectiveMaxTokens = Math.min(maxAllowedTokens, maxTokens);
 
         const payload = JSON.stringify({
