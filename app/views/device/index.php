@@ -82,6 +82,7 @@ if ($dbModels) {
             <?php foreach ($data['devices'] as $dev):
                 $statusColors = [
                     'connected'     => ['dot' => 'bg-emerald-500', 'text' => 'text-emerald-700', 'bg' => 'bg-emerald-50 border-emerald-200', 'label' => 'Terhubung'],
+                    'reconnecting'  => ['dot' => 'bg-amber-500',   'text' => 'text-amber-700',   'bg' => 'bg-amber-50 border-amber-200',     'label' => 'Menghubungkan...'],
                     'disconnected'  => ['dot' => 'bg-rose-500',    'text' => 'text-rose-700',    'bg' => 'bg-rose-50 border-rose-200',       'label' => 'Terputus'],
                     'qr'            => ['dot' => 'bg-sky-500',     'text' => 'text-sky-700',     'bg' => 'bg-sky-50 border-sky-200',         'label' => 'Scan QR'],
                     'initializing'  => ['dot' => 'bg-purple-500',  'text' => 'text-purple-700',  'bg' => 'bg-purple-50 border-purple-200',   'label' => 'Memulai'],
@@ -145,7 +146,7 @@ if ($dbModels) {
                         </button>
 
                         <!-- Scan QR Button (jika belum terhubung atau ingin scan baru) -->
-                        <?php if ($dev['status'] !== 'connected'): ?>
+                        <?php if ($dev['status'] !== 'connected' && $dev['status'] !== 'reconnecting'): ?>
                         <button onclick="scanQR('<?= htmlspecialchars($dev['session_id']) ?>', false)"
                                 title="Scan QR Code WhatsApp"
                                 class="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25 text-xs font-semibold px-3 py-1.5 rounded-lg transition shadow-sm active:scale-95 animate-pulse">
@@ -162,7 +163,7 @@ if ($dbModels) {
                         <?php endif; ?>
 
                         <!-- Disconnect -->
-                        <?php if ($dev['status'] === 'connected'): ?>
+                        <?php if ($dev['status'] === 'connected' || $dev['status'] === 'reconnecting'): ?>
                         <button onclick="doDisconnect('<?= htmlspecialchars($dev['session_id']) ?>')"
                                 title="Putuskan Sesi WhatsApp"
                                 class="inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition active:scale-95">
@@ -819,6 +820,8 @@ if ($dbModels) {
 
                             if (s && s.status === 'connected') {
                                 badge.html('<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-50 border-emerald-200 text-emerald-700"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>Terhubung</span>');
+                            } else if (s && (s.status === 'initializing' || s.status === 'reconnecting')) {
+                                badge.html('<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-50 border-amber-200 text-amber-700"><span class="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>Menghubungkan...</span>');
                             } else if (s && s.status === 'qr') {
                                 badge.html('<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-sky-50 border-sky-200 text-sky-700"><span class="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse"></span>Scan QR</span>');
                             } else {

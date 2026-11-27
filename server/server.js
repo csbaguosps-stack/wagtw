@@ -855,7 +855,8 @@ function isAdLeadContent(text) {
         'paket kacamata', 'paket kacamata 75k', '75k', 'promo kacamata',
         'frame dan lensa gratis', 'lensa gratis', 'frame gratis',
         'promo optik', 'koleksi optik', 'diskon optik',
-        'mau kacamata', 'beli kacamata', 'pesan kacamata', 'gratis lensa'
+        'mau kacamata', 'beli kacamata', 'pesan kacamata', 'gratis lensa',
+        'optik', 'winsee', 'halo optik', 'halo winsee', 'mau tanya'
     ];
     if (adTemplates.some(tpl => clean.includes(tpl))) return true;
 
@@ -864,7 +865,8 @@ function isAdLeadContent(text) {
         'lok dimana', 'lok dimana ya', 'lokasi dimana', 'lokasi di mana', 'alamat dimana',
         'alamat di mana', 'posisi dimana', 'ada di mana', 'ada dimana', 'daerah mana',
         'cabang dimana', 'cabang di mana', 'optik nya dimana', 'optiknya dimana', 'tokonya dimana',
-        'di mn', 'dmn', 'dimn', 'optiknya', 'optik nya'
+        'di mn', 'dmn', 'dimn', 'optiknya', 'optik nya', 'margonda', 'depok', 'bogor',
+        'buka jam', 'jam buka', 'jam operasional'
     ];
     if (locationKeywords.some(kw => clean.includes(kw))) return true;
 
@@ -1461,8 +1463,14 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
                         [deviceId, remotePhone]
                     );
 
-                    const isFalseAdminMute = mutedRows.length && mutedRows[0].reason === 'admin_talking';
-                    if (isFalseAdminMute) {
+                    const muteReason = mutedRows[0]?.reason || '';
+                    const isSystemMute = (muteReason === 'ai_rate_limit' || muteReason === 'ai_server_down' || muteReason === 'ai_send_failed');
+
+                    if (isSystemMute) {
+                        console.log(`[AI UNMUTE - SYSTEM RETRY] Kontak ${remotePhone} sebelumnya dimute karena kendala teknis (${muteReason}). Mengaktifkan kembali Bot AI untuk membalas...`);
+                        await unmuteContact(deviceId, remotePhone, senderJid);
+                        // Lanjut proses balasan AI!
+                    } else if (isFalseAdminMute) {
                         const inquiryKeywords = [
                             'dimana', 'di mana', 'lokasi', 'alamat', 'cabang', 'toko',
                             'harga', 'berapa', 'biaya', 'ongkir', 'tarif', 'price',
@@ -1485,7 +1493,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
                             return;
                         }
                     } else {
-                        console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin (${mutedRows[0]?.reason || 'muted'}). Bot AI dinonaktifkan.`);
+                        console.log(`[AI MUTED] Kontak/Grup ${remotePhone} sedang dalam sesi Admin (${muteReason || 'muted'}). Bot AI dinonaktifkan.`);
                         await touchMutedContact(deviceId, remotePhone);
                         return;
                     }
@@ -1833,7 +1841,7 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                     for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
                         const mod = modelsToTry[mIdx];
                         console.log(`[Groq] Trying server ${sIdx + 1}/${serversToTry.length}: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
-                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext, 450);
+                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext, 550);
                         if (groqRes && groqRes.ok && groqRes.text) {
                             aiReply = groqRes.text;
                             console.log(`[Groq] ✓ Got reply from server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
@@ -1953,11 +1961,43 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                 return; // Selesai, jangan lanjut ke autoreply biasa
             } else {
                 await sock.sendPresenceUpdate('paused', senderJid).catch(() => { });
+                console.warn(`[AI RETRY NEEDED] Model AI belum dapat merespon untuk device ${deviceId}.`);
+
+                // JANGAN BIARKAN CHAT KOSONG TANPA JAWABAN!
+                // Cek apakah ada rule autoreply kustom atau kirim pesan ramah handoff
+                let fallbackSent = false;
+                try {
+                    const fallbackRules = await dbQuery(
+                        'SELECT reply_text FROM autoreplies WHERE (device_id = ? OR device_id IS NULL) AND active = 1 AND match_type = "contains" AND ? LIKE CONCAT("%", trigger_word, "%") LIMIT 1',
+                        [deviceId, incomingText.toLowerCase()]
+                    );
+                    if (fallbackRules.length && fallbackRules[0].reply_text) {
+                        const fallbackText = fallbackRules[0].reply_text;
+                        const sentMsg = await sock.sendMessage(senderJid, { text: fallbackText }, { quoted: fullMsg });
+                        const waMsgId = sentMsg?.key?.id || null;
+                        markBotSentMessage(waMsgId);
+                        await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', fallbackText, 'out', 'sent');
+                        fallbackSent = true;
+                    }
+                } catch (_) {}
+
+                if (!fallbackSent) {
+                    const friendlyFallback = (aiConfig && aiConfig.ai_handoff_text && aiConfig.ai_handoff_text.trim())
+                        ? aiConfig.ai_handoff_text.trim()
+                        : "Halo kak! Terima kasih telah menghubungi *Winsee Optik* 😊\nPesan kakak sudah kami terima. Ada yang bisa kami bantu seputar kacamata, periksa mata gratis, atau lokasi cabang toko kami?";
+                    try {
+                        const sentMsg = await sock.sendMessage(senderJid, { text: friendlyFallback }, { quoted: fullMsg });
+                        const waMsgId = sentMsg?.key?.id || null;
+                        markBotSentMessage(waMsgId);
+                        await saveMessageToDB(sessionId, waMsgId, myPhone, remotePhone, 'text', friendlyFallback, 'out', 'sent');
+                    } catch (_) {}
+                }
+
                 if (isRateLimited) {
-                    console.warn(`[AI LIMIT] AI mencapai limit (Rate Limit / Quota) untuk device ${deviceId}. Me-mute kontak ${remotePhone} selama 1 menit dan akan otomatis membalas kembali setelah 1 menit...`);
+                    console.warn(`[AI LIMIT] AI mencapai limit rate/quota untuk device ${deviceId}. Kontak ${remotePhone} diberi cooldown singkat 30 detik...`);
                     await muteContact(deviceId, remotePhone, 'ai_rate_limit');
                 } else {
-                    console.warn(`[AI FAILED] Semua server AI gagal/mati untuk device ${deviceId}. Me-mute kontak ${remotePhone} secara otomatis ke status Bot Mute agar ditangani staf / di-retry otomatis...`);
+                    console.warn(`[AI FAILED] Server AI sedang mengalami kendala. Kontak ${remotePhone} dialihkan ke penanganan ramah.`);
                     await muteContact(deviceId, remotePhone, 'ai_server_down');
                 }
                 return;
@@ -2204,13 +2244,16 @@ async function createSession(sessionId, isRetry = false, forceNewAuth = false) {
 
             // 5. TEMPORARY ERROR LAINNYA: Connection Lost (408 pada device terdaftar), 500, socket reset, network glitch, dll.
             // JANGAN HAPUS AUTH! Coba reconnect otomatis secara berulang dan cerdas (tanpa menyerah).
-            sessions[sessionId].status = 'disconnected';
             sessions[sessionId].qrBase64 = null;
             sessions[sessionId].pairingCode = null;
             sessions[sessionId].socket = null;
-            await updateDeviceStatus(sessionId, 'disconnected');
 
             if (hasValidCreds) {
+                // Device sudah terdaftar dengan kredensial sah: JANGAN ubah ke 'disconnected'!
+                // Tandai 'reconnecting' agar frontend dan PHP tetap mempertahankan status koneksi
+                sessions[sessionId].status = 'reconnecting';
+                await updateDeviceStatus(sessionId, 'reconnecting');
+
                 const retries = (sessions[sessionId]?.retries || 0) + 1;
                 sessions[sessionId].retries = retries;
 
@@ -2603,7 +2646,22 @@ app.get('/', (req, res) => {
     });
 });
 
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
+    // Auto-heal: jika ada device terdaftar di DB yang belum aktif di memori sesi engine
+    try {
+        const devs = await dbQuery("SELECT session_id, status FROM devices WHERE status IN ('connected','reconnecting')");
+        for (const dev of devs) {
+            const sid = dev.session_id;
+            if (!sessions[sid] || (!sessions[sid].socket && sessions[sid].status !== 'reconnecting' && sessions[sid].status !== 'initializing')) {
+                const credsPath = path.join(AUTH_DIR, sid, 'creds.json');
+                if (fs.existsSync(credsPath)) {
+                    console.log(`[/api/status AUTO-HEAL] Mengaktifkan sesi terdaftar di latar belakang: ${sid}`);
+                    createSession(sid, false, false).catch(() => {});
+                }
+            }
+        }
+    } catch (_) {}
+
     const active = Object.keys(sessions).map(id => ({
         sessionId: id,
         status: sessions[id].status,
@@ -3356,11 +3414,10 @@ async function runHourlyAutoReconnect() {
                 });
                 reconnectedCount++;
             } else {
-                console.log(`[AUTO-RECONNECT 1 JAM] 🔄 Sesi ${sid} (${dev.phone || dev.name}) aktif. Melakukan penyegaran socket & koneksi berkala...`);
-                createSession(sid, false, false).catch(err => {
-                    console.error(`[AUTO-RECONNECT 1 JAM ERR] Sesi ${sid}:`, err.message);
-                });
-                reconnectedCount++;
+                console.log(`[AUTO-RECONNECT 1 JAM] ✓ Sesi ${sid} (${dev.phone || dev.name}) aktif dan terhubung. Menjaga koneksi tetap hangat.`);
+                try {
+                    currentSession.socket.sendPresenceUpdate('available').catch(() => {});
+                } catch (_) {}
             }
 
             // Jeda 3 detik antar device agar tidak terjadi beban spike bersamaan
@@ -3423,8 +3480,8 @@ async function restoreSessionsFromDB() {
                 createSession(device.session_id).catch(e =>
                     console.error(`[RESTORE ERROR] ${device.session_id}:`, e.message)
                 );
-                // Jeda antar sesi agar tidak overload
-                await new Promise(r => setTimeout(r, 2000));
+                // Jeda singkat antar sesi agar cepat terhubung tanpa overload
+                await new Promise(r => setTimeout(r, 500));
             } else {
                 console.log(`[RESTORE] Lewati ${device.session_id} (menunggu scan dari web)`);
                 if (device.status !== 'pending') {
@@ -3451,8 +3508,8 @@ function onServerReady(listeningOn) {
     console.log('╚═══════════════════════════════════════════════════╝');
     console.log('');
 
-    // Restore semua sesi yang sebelumnya aktif setelah server siap
-    setTimeout(restoreSessionsFromDB, 3000);
+    // Restore semua sesi yang sebelumnya aktif segera setelah server siap
+    setTimeout(restoreSessionsFromDB, 500);
 }
 
 // CloudLinux cPanel Node.js Selector Passenger Support

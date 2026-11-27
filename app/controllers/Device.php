@@ -74,11 +74,18 @@ class Device extends Controller {
                         $this->model('Device_model')->updateStatus($sid, 'qr');
                         $dev['status'] = 'qr';
                     }
+                } elseif ($nodeState === 'initializing' || $nodeState === 'reconnecting') {
+                    // Node sedang dalam proses menghubungkan ulang, pertahankan status
+                    if ($dev['status'] !== 'connected' && $dev['status'] !== 'reconnecting') {
+                        $dev['status'] = 'reconnecting';
+                    }
                 } else {
-                    // Sesi belum aktif di memori engine atau terputus
+                    // JANGAN ubah status di DB ke 'disconnected' saat user hanya membuka menu Device!
+                    // Jika device di database berstatus 'connected', picu reconnect otomatis di Node Engine
                     if ($dev['status'] === 'connected') {
-                        $this->model('Device_model')->updateStatus($sid, 'disconnected');
-                        $dev['status'] = 'disconnected';
+                        $this->callNode('POST', '/api/session/reconnect', ['sessionId' => $sid]);
+                        // Pertahankan status 'connected' agar tidak terlogout
+                        $dev['status'] = 'connected';
                     }
                 }
             }
