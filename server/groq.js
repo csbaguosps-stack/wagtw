@@ -80,7 +80,7 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 600) 
             model: safeModel,
             messages: messages,
             max_tokens: effectiveMaxTokens,
-            temperature: 0.6,
+            temperature: 0.1,
         });
 
         const options = {

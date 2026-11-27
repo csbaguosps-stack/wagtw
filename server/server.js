@@ -1715,7 +1715,7 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
             sysPrompt = sysPrompt + "\n" + waFormatRules;
 
             if (isFromMetaAd) {
-                sysPrompt += `\n[CATATAN PENTING - PELANGGAN DARI IKLAN META (INSTAGRAM/FACEBOOK)]: Pelanggan ini baru saja mengklik iklan promosi kami. Sambut dengan sangat ramah, hangat, dan antusias. Langsung jawab pertanyaannya seputar promo, frame, lensa, atau lokasi cabang toko Winsee Optik terdekat secara jelas dan lengkap agar pelanggan langsung terbantu!`;
+                sysPrompt += `\n[CATATAN PELANGGAN DARI IKLAN META]: Pelanggan ini masuk dari iklan promosi. Langsung respon to the point sesuai Rules (prioritaskan info promo 75k/150k atau outlet sesuai yang ditanyakan, dilarang mengarang informasi).`;
             }
 
             // ── Inject Tanggal & Jam WIB ───────────────────────────────────────
@@ -1747,12 +1747,20 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
                 }
                 if (kbRows && kbRows.length > 0) {
                     const kbText = kbRows.map(k => `### ${k.title}:\n${k.content}`).join('\n\n');
-                    sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ BISNIS TOKO (SUMBER KEBENARAN UTAMA - WAJIB DIIKUTI 100%)]:\n` + kbText;
-                    sysPrompt += `\n\n[INSTRUKSI AKURASI DATA TOKO]:\n1. Semua jawaban seputar lokasi cabang, alamat, jam operasional, promo (paket 75k, fuji, dll.), link maps, dan nomor telepon WAJIB 100% mengikuti DATA PENGETAHUAN & FAQ BISNIS TOKO di atas.\n2. DILARANG KERAS mengarang alamat atau informasi yang tidak tertulis di data toko.`;
+                    sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ BISNIS TOKO (AI DATA LIST - SUMBER KEBENARAN UTAMA)]:\n` + kbText;
                 }
             } catch (kbErr) {
                 console.warn('[AI] Gagal membaca data knowledge base device:', kbErr.message);
             }
+
+            // ── PENEGASAN KEPATUHAN MUTLAK TERHADAP RULES & DATA AI ──────────────
+            sysPrompt += `\n\n[PERINTAH MUTLAK (WAJIB DIIKUTI SESUAI RULES & DATA)]:
+1. Jawaban kamu WAJIB 100% mengikuti ATURAN (Rules / System Prompt) dan DATA (AI Data List) di atas.
+2. DILARANG KERAS MENGARANG (halusinasi) informasi, harga, promo, stock, outlet, nomor telepon, atau syarat yang tidak tertulis di data toko.
+3. DILARANG SELALU MEMBUKA/MENGAWALI CHAT DENGAN "Halo kak 😊", "Halo kak", "Halo!", atau sapaan template serupa. Langsung jawab ke inti pertanyaan customer secara to the point.
+4. Jika customer membahas promo murah / 75k / 150k: WAJIB ikuti aturan PAKET PROMO 75K & 150K (prioritaskan link Shopee https://shopee.co.id/winseeofficial/, lensa clear, SPH 0.00 s/d -6.00, CYL max -2.00, dan tegaskan stok store offline terbatas & wajib dicek dulu).
+5. Jika customer bertanya "dimana" / lokasi outlet: Ikuti aturan OUTLET (arahkan ke https://winseeoptik.com/toko atau tanyakan kota/area customer, jangan tampilkan semua outlet sekaligus tanpa alasan).
+6. Selalu pertahankan konteks percakapan dan akhiri dengan pertanyaan ramah yang relevan untuk mengarahkan customer.`;
 
             // ── Web Search Integration ─────────────────────────────────────────
             // Jangan jalankan web search jika pertanyaan seputar info toko internal (lokasi, alamat, cabang, harga, promo, jam operasional)
