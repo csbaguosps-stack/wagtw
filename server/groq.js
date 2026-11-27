@@ -150,16 +150,16 @@ async function callGroq(apiKey, model, sysPrompt, chatHistory, maxTokens = 600) 
         const estimatedInputTokens = Math.ceil(totalChars / 3.0);
 
         // Alokasikan max_tokens yang optimal:
-        // Cukup besar (450 - 650 tokens) agar teks TIDAK TERPOTONG dan sangat detail,
-        // namun tetap di bawah batas kuota TPM (7.700 - estimatedInputTokens) agar tidak pernah 413.
-        const maxAllowedTokens = Math.max(350, Math.min(650, 7700 - estimatedInputTokens));
-        const effectiveMaxTokens = Math.min(maxAllowedTokens, maxTokens || 600);
+        // Cukup besar (600 - 1.100 tokens) agar teks TIDAK TERPOTONG dan sangat detail,
+        // namun tetap di bawah batas kuota TPM (7.850 - estimatedInputTokens) agar tidak pernah 413.
+        const maxAllowedTokens = Math.max(500, Math.min(1100, 7850 - estimatedInputTokens));
+        const effectiveMaxTokens = Math.min(maxAllowedTokens, maxTokens || 1000);
 
         const payload = JSON.stringify({
             model: safeModel,
             messages: messages,
             max_tokens: effectiveMaxTokens,
-            temperature: 0.1,
+            temperature: 0.6,
         });
 
         const options = {

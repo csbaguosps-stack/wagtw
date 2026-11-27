@@ -1316,6 +1316,60 @@ async function touchMutedContact(deviceId, phone) {
     }
 }
 
+/**
+ * Filter cerdas relevansi bab Knowledge Base jika ukuran data sangat besar (> 6.000 karakter)
+ * Memastikan topik yang ditanyakan pelanggan (promo, lokasi, lensa, bpjs) masuk secara utuh,
+ * sekaligus memangkas ensiklopedia yang tidak relevan agar prompt hemat token dan AI leluasa menjawab detail tanpa terpotong.
+ */
+function filterRelevantKbSections(fullKbText, queryText) {
+    if (!fullKbText || fullKbText.length <= 6000) return fullKbText;
+    const query = (queryText || '').toLowerCase();
+
+    // Pecah menjadi bab berdasarkan pemisah judul (#, ##, ===, ---, [1], dll.)
+    const rawSections = fullKbText.split(/\n(?=(?:[=-]{3,}|#{1,3}\s+|\[\d+\]))/);
+    if (rawSections.length <= 1) return fullKbText;
+
+    const isPromoQuery = /promo|paket|harga|biaya|tarif|diskon|murah|75k|150k|gratis|free|beli|order|pesan|katalog|shopee/i.test(query);
+    const isLocationQuery = /lokasi|alamat|cabang|outlet|toko|di mana|dimana|posisi|daerah|area|jakarta|bandung|surabaya|depok|bekasi|bogor|buka|jam/i.test(query);
+    const isBpjsQuery = /bpjs|faskes|rujukan|klaim/i.test(query);
+    const isLensQuery = /lensa|minus|plus|silinder|cylinder|progresif|progressive|bluray|photochromic|fotokromik|fuji|zeiss|essilor|hoya/i.test(query);
+    const isEyeHealthQuery = /sakit|perih|gatal|merah|kabur|buram|gejala|dokter|periksa|cek mata|tes mata/i.test(query);
+
+    const selected = [];
+    let charCount = 0;
+    const MAX_KB_CHARS = 7500;
+
+    for (const sec of rawSections) {
+        const lower = sec.toLowerCase();
+
+        // Bab profil & identitas dasar selalu penting
+        const isCore = lower.includes('identitas bisnis') || lower.includes('info penting') || (lower.includes('website') && lower.includes('shopee'));
+
+        let isRelevant = false;
+        if (isCore) isRelevant = true;
+        if (isPromoQuery && (lower.includes('promo') || lower.includes('paket') || lower.includes('free frame') || lower.includes('75.000') || lower.includes('150.000') || lower.includes('diskon'))) isRelevant = true;
+        if (isLocationQuery && (lower.includes('outlet') || lower.includes('cabang') || lower.includes('alamat') || lower.includes('jakarta') || lower.includes('bandung') || lower.includes('surabaya') || lower.includes('depok') || lower.includes('bekasi') || lower.includes('jam'))) isRelevant = true;
+        if (isBpjsQuery && lower.includes('bpjs')) isRelevant = true;
+        if (isLensQuery && (lower.includes('index') || lower.includes('lensa') || lower.includes('pricelist'))) isRelevant = true;
+        if (isEyeHealthQuery && (lower.includes('mata perih') || lower.includes('gejala') || lower.includes('kapan harus periksa'))) isRelevant = true;
+
+        // Jangan sertakan ensiklopedia medis jika bukan sedang tanya sakit mata
+        if (!isRelevant) {
+            const isHeavyIrrelevant = lower.includes('penyebab mata perih') || lower.includes('gejala umum masalah mata') || (lower.includes('index 1.56') && !isLensQuery) || (lower.includes('bpjs') && !isBpjsQuery);
+            if (isHeavyIrrelevant) continue;
+        }
+
+        if (isRelevant || (!isPromoQuery && !isLocationQuery && !isBpjsQuery && !isLensQuery && !isEyeHealthQuery)) {
+            if (charCount + sec.length <= MAX_KB_CHARS) {
+                selected.push(sec);
+                charCount += sec.length;
+            }
+        }
+    }
+
+    return selected.length > 0 ? selected.join('\n\n') : fullKbText;
+}
+
 // ─── Autoreply Engine (dengan AI Groq) ──────────────────────────────────────
 async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = null, skipMuteCheck = false) {
     if (!incomingText || !sessionId || !senderJid) return;
@@ -1695,19 +1749,16 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
             let aiReply = null;
             let sysPrompt = aiConfig.rules || 'Kamu adalah asisten WhatsApp yang ramah dan helpful. Balas dengan singkat dan jelas dalam Bahasa Indonesia.';
 
-            // ── Aturan Format Balasan WhatsApp (Anti-Tabel, Anti-Gantung & Ramah Layar HP) ───
+            // ── Aturan Format Balasan WhatsApp (Lengkap, Jelas, Detail & Anti-Gantung) ───
             const waFormatRules = `
-[ATURAN FORMAT BALASAN WHATSAPP & PENULISAN TUNTAS (WAJIB DIIKUTI)]:
-1. Jawaban WAJIB rapi, bersih, padat, dan nyaman dibaca di layar HP WhatsApp.
-2. DILARANG KERAS menggunakan format tabel Markdown (karakter '|'). WhatsApp TIDAK mendukung tabel Markdown!
-3. DILARANG menggunakan tag HTML seperti <br>, <b>, <i>, dsb.
-4. Gunakan format daftar poin (bullet '•' atau nomor '1.', '2.') untuk menguraikan penjelasan atau langkah.
-5. Gunakan cetak tebal WhatsApp (*kata*) untuk menonjolkan judul poin atau istilah penting.
-6. Berikan jeda 1 baris kosong antar poin atau paragraf agar teks tidak menumpuk rapat.
-7. PENULISAN WAJIB TUNTAS DAN TIDAK BOLEH MENGGANTUNG: Dilarang keras memotong kalimat di tengah jalan atau menggantung tanpa akhir. Setiap kalimat wajib selesai sampai tanda baca penutup yang jelas (. / ! / ?).
-8. PADAT, DETAIL & TO THE POINT: Jelaskan jawaban secara padat, jelas, dan tuntas. Jika ada banyak promo/cabang/katalog (lebih dari 3 pilihan), berikan rangkuman 2-3 pilihan utama yang paling populer secara tuntas, lalu berikan penawaran ramah jika ingin cek opsi lainnya. JANGAN memaksakan menulis seluruh katalog sekaligus agar balasan tidak terpotong panjangnya.
-9. Selalu akhiri pesan dengan kalimat penutup atau pertanyaan ramah yang relevan dan selesai sempurna.
-10. FORMAT NOMOR TELEPON/WHATSAPP: Jika memberikan nomor telepon atau kontak WhatsApp, WAJIB tuliskan dalam format tautan/link yang BISA LANGSUNG DIKLIK oleh pelanggan di WhatsApp, yaitu https://wa.me/628xxx (contoh: 'Telp/WA: https://wa.me/6281234567890'). Dilarang memecah angka telepon dengan spasi atau karakter aneh agar link tetap utuh dan bisa langsung diklik.`;
+[ATURAN JAWABAN LENGKAP, JELAS, DETAIL & TUNTAS (WAJIB DIIKUTI)]:
+1. JAWAB SECARA JELAS, LENGKAP, DAN DETAIL: Berikan penjelasan yang rinci, terang, dan mudah dipahami pelanggan. Tuliskan seluruh rincian produk, harga, jenis paket, jenis lensa, dan persyaratannya secara lengkap tanpa disingkat-singkat agar pelanggan mendapat informasi yang memuaskan.
+2. TULISKAN SEMUA PROMO / INFORMASI YANG RELEVAN yang ditanyakan pelanggan menggunakan format daftar poin (bullet '•'). Dilarang memotong, menyembunyikan, atau menyingkat promo yang relevan.
+3. DILARANG KERAS menggunakan format tabel Markdown (karakter '|'). WhatsApp TIDAK mendukung tabel Markdown! Gunakan format daftar poin (bullet '•') dan cetak tebal WhatsApp (*judul*) dengan jeda 1 baris antar poin agar rapi di layar HP.
+4. DILARANG menggunakan tag HTML seperti <br>, <b>, <i>, dsb.
+5. PENULISAN WAJIB TUNTAS DAN TIDAK BOLEH MENGGANTUNG: Dilarang keras memotong kalimat di tengah jalan atau berhenti tanpa akhir. Setiap kalimat dan poin wajib selesai sempurna sampai tanda baca penutup yang jelas (. / ! / ?).
+6. FORMAT LINK RESMI / NOMOR WHATSAPP: Tuliskan tautan atau kontak yang bisa diklik langsung oleh pelanggan di WhatsApp (contoh: link Shopee promo https://shopee.co.id/winseeofficial/ atau https://wa.me/6281234567890).
+7. Selalu akhiri pesan dengan kalimat penutup yang ramah dan pertanyaan yang relevan untuk membantu kebutuhan customer.`;
 
             sysPrompt = sysPrompt + "\n\n" + waFormatRules;
 
@@ -1738,7 +1789,14 @@ async function processAutoreply(sessionId, senderJid, incomingText, fullMsg = nu
                 const kbRows = await dbQuery('SELECT title, content FROM device_ai_data WHERE device_id = ? ORDER BY id ASC', [deviceId]);
                 if (kbRows && kbRows.length > 0) {
                     hasDeviceData = true;
-                    const kbText = kbRows.map(k => `### ${k.title}:\n${k.content}`).join('\n\n');
+                    let kbText = kbRows.map(k => `### ${k.title}:\n${k.content}`).join('\n\n');
+                    
+                    // Filter cerdas relevansi bab jika ukuran Knowledge Base sangat besar (> 6.000 karakter)
+                    // Menjamin topik yang ditanyakan (promo, lokasi, lensa, dll.) masuk utuh sekaligus menghemat token
+                    if (kbText.length > 6000) {
+                        kbText = filterRelevantKbSections(kbText, incomingText);
+                    }
+                    
                     sysPrompt += `\n\n[DATA PENGETAHUAN & FAQ (AI DATA LIST PERANGKAT INI)]:\n` + kbText;
                 }
             } catch (kbErr) {
@@ -1842,7 +1900,7 @@ Gunakan informasi di atas sebagai referensi tambahan jika relevan. Selalu priori
                     for (let mIdx = 0; mIdx < modelsToTry.length; mIdx++) {
                         const mod = modelsToTry[mIdx];
                         console.log(`[Groq] Trying server ${sIdx + 1}/${serversToTry.length}: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
-                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext, 600);
+                        const groqRes = await callGroq(srv.api_key, mod.model_name, sysPrompt, chatContext, 1000);
                         if (groqRes && groqRes.ok && groqRes.text) {
                             aiReply = groqRes.text;
                             console.log(`[Groq] ✓ Got reply from server: ${srv.label || 'Auto'} | Model: ${mod.model_name}`);
