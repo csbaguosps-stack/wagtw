@@ -18,47 +18,47 @@
 
 ## 🚀 Changelog & Recent Fixes (v3.1.0 Update)
 
-Dokumentasi pembaruan terbaru untuk stabilitas, arsitektur multi-device, dan performa engine AI:
+Detailed documentation of recent updates covering system stability, multi-device isolation architecture, and AI engine performance:
 
 ### 1. 🤖 Pure Multi-Device AI Isolation (Device-Agnostic Engine)
-- **Aturan & Data 100% Dinamis per Nomor**:
-  - Seluruh aturan hardcode bisnis/toko, link, dan promo telah **dihapus total** dari `server.js`.
-  - Core engine kini 100% *device-agnostic* & netral. Setiap nomor WhatsApp (`device_id`) memiliki data dan instruksi yang terisolasi secara mandiri:
-    - **Rules / System Prompt**: Dikonfigurasi per nomor via tombol **AI ON/OFF** (`device_ai_settings WHERE device_id = ?`).
-    - **Knowledge Base & FAQ**: Dikelola per nomor via tombol **Data** (`device_ai_data WHERE device_id = ?`).
-  - Tidak ada lagi pencampuran atau kebocoran data antar-nomor yang berbeda.
-- **Kepatuhan Mutlak & Anti-Halusinasi (*Zero Hallucination*)**:
-  - LLM diinstruksikan secara tegas untuk 100% hanya menjawab berdasarkan Rules dan Data List nomor tersebut tanpa mengarang informasi harga, promo, atau lokasi.
-  - Parameter `temperature` diatur ke `0.1` pada `groq.js` untuk menghasilkan jawaban yang deterministik, faktual, dan patuh aturan.
+- **100% Dynamic Rules & Knowledge Base per Device**:
+  - All hardcoded business rules, store links, promo codes, and brand-specific keywords have been completely removed from `server.js`.
+  - The core engine is now 100% device-agnostic and multi-tenant ready. Each WhatsApp number (`device_id`) operates within its own strictly isolated context:
+    - **Rules / System Prompt**: Configured per device via the **AI ON/OFF** modal (`device_ai_settings WHERE device_id = ?`).
+    - **Knowledge Base & FAQ**: Managed per device via the **Data** modal (`device_ai_data WHERE device_id = ?`).
+  - Guarantees zero cross-device contamination or data bleeding between different phone numbers.
+- **Strict Adherence & Zero Hallucination**:
+  - The LLM is strictly instructed to answer **100% based exclusively** on the specific device's Rules and Data List without fabricating prices, promotions, or store locations.
+  - Model `temperature` is pinned to `0.1` in `groq.js` for deterministic, fact-grounded, and rule-compliant responses.
 
-### 2. 🧠 Preservasi Knowledge Base & Anti-Truncation
-- **Penghapusan Pemotongan Teks Destruktif**:
-  - Menghapus pembatasan `substring(0, 8000)` pada prompt AI yang sebelumnya memotong Knowledge Base (15.000+ karakter).
-  - Mengimplementasikan kompresi cerdas pada spasi berlebih dan pembatas dekoratif (`===`, `---`, `___`) sehingga seluruh FAQ, daftar cabang, dan katalog masuk secara utuh ke dalam *context window*.
-- **Alokasi Token Output Adaptif**:
-  - Mengganti pemotongan token kaku dengan perhitungan token adaptif (alokasi 250–500 token output). Jawaban AI kini tampil detail, lengkap, tidak terpotong di tengah kalimat, dan tetap aman di bawah limit 8.000 TPM (Token Per Minute) Groq.
+### 2. 🧠 Knowledge Base Preservation & Anti-Truncation
+- **Eliminated Destructive Prompt Truncation**:
+  - Removed aggressive `substring(0, 8000)` prompt slicing that previously chopped off extensive business knowledge bases (15,000+ characters).
+  - Implemented lossless whitespace and decorative separator compression (`===`, `---`, `___`) so that complete FAQs, branch directories, and price sheets fit natively within the LLM context window.
+- **Adaptive Output Token Allocation**:
+  - Replaced rigid token limits with adaptive calculation (allocating 250–500 completion tokens). AI responses are now detailed, complete, and never cut off mid-sentence, while staying safely below Groq's 8,000 TPM (Tokens Per Minute) threshold.
 
-### 3. 🔄 Auto-Switch Model AI Aktif & Fallback Model Lama
-- **Pemetaan Otomatis Model Decommissioned**:
-  - Menambahkan kamus pemetaan otomatis (*auto-fallback*) di `groq.js` untuk model-model lama Groq (`llama-3.1-8b-instant`, `llama-3.3-70b-versatile`, dll.) langsung dialihkan ke model resmi aktif (`openai/gpt-oss-20b` dan `openai/gpt-oss-120b`). Mencegah error HTTP 404 (*Model Not Found*).
-- **Manajemen Model AI Dinamis**:
-  - Daftar model di dashboard kini memproses dan menampilkan murni model aktif yang terdaftar di database.
+### 3. 🔄 AI Model Auto-Switching & Decommissioned Fallback
+- **Automatic Fallback for Decommissioned Models**:
+  - Added an automated mapping dictionary in `groq.js` that seamlessly redirects requests using legacy Groq models (`llama-3.1-8b-instant`, `llama-3.3-70b-versatile`, etc.) to officially supported active models (`openai/gpt-oss-20b` and `openai/gpt-oss-120b`), preventing HTTP 404 (*Model Not Found*) errors.
+- **Dynamic Active Model Management**:
+  - The web dashboard now strictly displays, validates, and processes only active models registered in the database.
 
-### 4. 📱 Stabilitas Koneksi Perangkat (Anti-Disconnect Permanen)
-- **Proteksi Sesi Aktif WhatsApp**:
-  - Memperbaiki issue di mana membuka menu Devices (`/public/device`) sempat memicu status disconnect atau terlogout.
-  - *Watchdog background* tidak lagi memutus paksa sesi Baileys yang valid dan terhubung, menjaga perangkat online 24/7 tanpa perlu scan QR ulang.
+### 4. 📱 Permanent Device Connection & Anti-Disconnect Protection
+- **Protected Active WhatsApp Sessions**:
+  - Resolved an issue where navigating to the **Devices** menu (`/public/device`) could inadvertently flag connected devices as disconnected or force unnecessary reconnects.
+  - The background watchdog now preserves valid, connected Baileys sockets, maintaining 24/7 online availability without requiring QR code re-scans.
 
-### 5. ⚡ Real-Time SPA Navigation & Auto-Save
-- **Penyimpanan Instan Tanpa Hard Refresh**:
-  - Peningkatan pada handler AJAX SPA di `main.js` sehingga penambahan data perangkat, API Key, Model AI, Rules, dan Data List langsung tersimpan dan ter-render ke tampilan tanpa perlu melakukan hard refresh manual (`Ctrl+F5`).
-  - Penyesuaian header cache CSS & asset untuk menghindari tampilan antarmuka yang tertahan di cache lama.
+### 5. ⚡ Real-Time SPA Navigation & Instant Auto-Save
+- **Instant Updates Without Manual Hard Refreshes**:
+  - Enhanced the AJAX SPA engine in `main.js` so that adding or updating devices, API keys, AI models, rules, and knowledge base entries persists and renders instantly without requiring manual browser hard refreshes (`Ctrl+F5`).
+  - Optimized asset caching headers to prevent stale CSS and script states in browsers.
 
-### 6. 💬 Deteksi Inquiry Cerdas & Hand-off Admin Manusia
-- **Pengenalan Pertanyaan Pelanggan Universal**:
-  - Menggeneralisasi kata kunci pertanyaan (*inquiry*) mencakup harga, lokasi, produk, promo, stok, jam operasional, dan garansi secara universal untuk segala sektor bisnis.
-  - Mencegah bot AI termute secara keliru saat pelanggan bertanya.
-  - Menjeda AI secara otomatis saat staf admin manusia mengetik langsung dari WhatsApp Web atau HP, dan mengaktifkan kembali ketika sesi admin selesai.
+### 6. 💬 Intelligent Inquiry Detection & Human Admin Handoff
+- **Universal Customer Inquiry Recognition**:
+  - Generalized intent detection to recognize customer queries (prices, locations, branch details, products, promotions, stock availability, business hours, and warranties) across any industry or business vertical.
+  - Prevents the AI assistant from mistakenly muting itself when customers ask questions.
+  - Automatically pauses AI replies when a human support agent actively replies from WhatsApp Web or phone, and seamlessly re-activates once the human support session ends.
 
 ---
 
