@@ -251,6 +251,26 @@ class Historywaweb extends Controller {
     }
 
     /**
+     * AJAX: Tandai semua pesan masuk sebagai telah dibaca
+     */
+    public function markAllAsRead()
+    {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') return;
+
+        $userId   = $this->getVisibleUserIdsString();
+        $deviceId = intval($_POST['device_id'] ?? 0);
+
+        $affected = $this->model('HistoryWaWeb_model')->markAllAsRead($userId, $deviceId);
+
+        echo json_encode([
+            'status'   => 'success',
+            'message'  => 'Semua pesan berhasil ditandai sebagai telah dibaca!',
+            'affected' => $affected
+        ]);
+    }
+
+    /**
      * AJAX: Hapus seluruh riwayat percakapan dengan kontak tertentu
      */
     public function deleteConversation()

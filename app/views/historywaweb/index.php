@@ -94,11 +94,19 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                 </button>
             </div>
 
-            <!-- Filter Pills (Semua, Chat Masuk, Belum Dibaca) -->
-            <div class="flex items-center gap-1.5 text-[11px] overflow-x-auto scrollbar-none pb-0.5">
-                <button type="button" class="waweb-filter-pill px-2.5 py-1 rounded-full font-semibold transition-all bg-emerald-100 text-emerald-800" data-filter="all">Semua</button>
-                <button type="button" class="waweb-filter-pill px-2.5 py-1 rounded-full font-semibold transition-all bg-gray-100 text-gray-600 hover:bg-gray-200" data-filter="in">Masuk</button>
-                <button type="button" class="waweb-filter-pill px-2.5 py-1 rounded-full font-semibold transition-all bg-gray-100 text-gray-600 hover:bg-gray-200" data-filter="unread">Belum Dibaca</button>
+            <!-- Filter Pills (Semua, Chat Masuk, Belum Dibaca) & Tombol Telah Dibaca Semua -->
+            <div class="flex items-center justify-between gap-1 text-[11px] pt-0.5">
+                <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                    <button type="button" class="waweb-filter-pill px-2.5 py-1 rounded-full font-semibold transition-all bg-emerald-100 text-emerald-800 shrink-0" data-filter="all">Semua</button>
+                    <button type="button" class="waweb-filter-pill px-2.5 py-1 rounded-full font-semibold transition-all bg-gray-100 text-gray-600 hover:bg-gray-200 shrink-0" data-filter="in">Masuk</button>
+                    <button type="button" class="waweb-filter-pill px-2.5 py-1 rounded-full font-semibold transition-all bg-gray-100 text-gray-600 hover:bg-gray-200 shrink-0" data-filter="unread">Belum Dibaca</button>
+                </div>
+
+                <!-- Tombol Telah Dibaca Semua -->
+                <button type="button" id="btn-mark-all-read" class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-[10.5px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-full transition shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer" title="Tandai semua pesan sebagai telah dibaca">
+                    <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 16 16"><path d="M12.354 4.354a.5.5 0 0 0-.708-.708L5 10.293 1.854 7.146a.5.5 0 1 0-.708.708l3.5 3.5a.5.5 0 0 0 .708 0l7-7zm-4.5 7.5l-.708-.708 4.5-4.5.708.708-4.5 4.5z"/></svg>
+                    <span>Telah Dibaca Semua</span>
+                </button>
             </div>
         </div>
 
@@ -831,6 +839,67 @@ $pageTitle = $data['title'] ?? 'History WA Web';
                     } else {
                         Swal.fire('Gagal', res.message, 'error');
                     }
+                }
+            });
+        });
+    });
+
+    // ─── TANDAI SEMUA TELAH DIBACA ────────────────────────────────────────────
+    $('#btn-mark-all-read').on('click', function(e) {
+        e.preventDefault();
+        const deviceId = $('#waweb-device-filter').val() || 0;
+        const totalUnread = allConversations.reduce((acc, c) => acc + (parseInt(c.unread_count) || 0), 0);
+
+        if (totalUnread === 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Tidak Ada Pesan Baru',
+                text: 'Semua pesan sudah dalam status telah dibaca.',
+                timer: 1600,
+                showConfirmButton: false
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: 'Tandai Telah Dibaca Semua?',
+            text: `Tandai seluruh pesan (${totalUnread} pesan belum dibaca) sebagai telah dibaca?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#10b981',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Ya, Tandai Dibaca',
+            cancelButtonText: 'Batal'
+        }).then(result => {
+            if (!result.isConfirmed) return;
+
+            // Optimistic update di memori & tampilan langsung
+            allConversations.forEach(c => { c.unread_count = 0; });
+            renderConversationsList();
+
+            $.ajax({
+                url: BASEURL + '/historywaweb/markAllAsRead',
+                type: 'POST',
+                data: { device_id: deviceId },
+                dataType: 'json',
+                success: function(res) {
+                    if (res.status === 'success') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Selesai!',
+                            text: 'Semua pesan berhasil ditandai sebagai telah dibaca.',
+                            timer: 1300,
+                            showConfirmButton: false
+                        });
+                        loadConversations(true);
+                    } else {
+                        Swal.fire('Gagal', res.message || 'Terjadi kesalahan.', 'error');
+                        loadConversations();
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error', 'Terjadi kesalahan koneksi ke server.', 'error');
+                    loadConversations();
                 }
             });
         });

@@ -168,6 +168,27 @@ class HistoryWaWeb_model {
     }
 
     /**
+     * Tandai SEMUA pesan masuk sebagai telah dibaca
+     */
+    public function markAllAsRead($userId, $deviceId = 0)
+    {
+        $sql = "UPDATE messages 
+                SET status = 'read' 
+                WHERE user_id IN ($userId) 
+                  AND direction = 'in' 
+                  AND status != 'read'";
+        if ($deviceId > 0) {
+            $sql .= " AND device_id = :device_id";
+        }
+        $this->db->query($sql);
+        if ($deviceId > 0) {
+            $this->db->bind('device_id', $deviceId);
+        }
+        $this->db->execute();
+        return $this->db->rowCount();
+    }
+
+    /**
      * Hapus seluruh percakapan dengan kontak tertentu
      */
     public function deleteConversation($userId, $deviceId, $contactPhone)
