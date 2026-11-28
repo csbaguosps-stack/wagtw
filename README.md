@@ -1,8 +1,8 @@
 # 🚀 WAGTW - WhatsApp Multi-Device Gateway & AI Marketing Platform
 
-![Version](https://img.shields.io/badge/Version-3.1.0-emerald?style=flat-square)
+![Version](https://img.shields.io/badge/Version-3.2.0-emerald?style=flat-square)
 ![PHP](https://img.shields.io/badge/PHP-7.4%20|%208.0%20|%208.1%20|%208.2-blue?style=flat-square)
-![Node.js](https://img.shields.io/badge/Node.js-20.x%20|%2022.x%20(Recommended)-green?style=flat-square)
+![Node.js](https://img.shields.io/badge/Node.js-20.x%20LTS%20(Recommended)-green?style=flat-square)
 ![Baileys](https://img.shields.io/badge/Engine-Baileys%20v7%20(Pure%20WebSocket)-purple?style=flat-square)
 ![Database](https://img.shields.io/badge/Database-MySQL%20|%20MariaDB-orange?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-teal?style=flat-square)
@@ -59,6 +59,36 @@ Detailed documentation of recent updates covering system stability, multi-device
   - Generalized intent detection to recognize customer queries (prices, locations, branch details, products, promotions, stock availability, business hours, and warranties) across any industry or business vertical.
   - Prevents the AI assistant from mistakenly muting itself when customers ask questions.
   - Automatically pauses AI replies when a human support agent actively replies from WhatsApp Web or phone, and seamlessly re-activates once the human support session ends.
+
+### 7. 🌐 Authentic "History WhatsApp Web" Live Chat Experience
+- **Authentic Split-Pane WhatsApp Web Interface**:
+  - Added a dedicated **History WA Web** module providing an authentic WhatsApp Web desktop experience inside WAGTW.
+  - Left pane features searchable contact threads, device indicators, relative timestamps (`HARI INI`, `KEMARIN`, dates), and unread badges.
+  - Right pane renders full conversational threads with custom WhatsApp doodle background, soft green outgoing bubbles (`#d9fdd3`) with delivery checkmarks, clean white incoming bubbles, and instant direct reply input with Enter shortcut.
+- **Real-Time Live Sync Without Manual Refresh**:
+  - Fully real-time background sync operating continuously on a 2.0-second interval, further supplemented by instant `wagtw:new_message` global event dispatching.
+  - Incoming chats and replies appear dynamically on screen without requiring users to manually refresh their browser.
+- **Bubble Deduplication & Smooth Optimistic UI**:
+  - Fixed duplicate bubble rendering on reply submission by tagging optimistic previews with `.temp-bubble` and automatically replacing them with server-confirmed database records.
+
+### 8. 🔘 One-Click "Mark All as Read" (Telah Dibaca Semua)
+- **Instant Global Unread Counter Reset**:
+  - Added a dedicated **Telah Dibaca Semua** action button in the conversation filter toolbar.
+  - Prompts a polite confirmation dialog showing the exact number of unread messages, clears all unread badges across all contact threads in memory immediately, and updates `messages.status = 'read'` across the database in one atomic query.
+
+### 9. 🛡️ Robust URL Tokenization & Markdown Parser
+- **Eliminated Malformed HTML Attribute Leakage**:
+  - Resolved an issue where URLs (`https://wa.me/...`, Google Maps) collided with WhatsApp italic underscore syntax (`_text_`), which previously caused raw HTML attributes (`blank" rel="noopener noreferrer"...`) to render as visible text on screen.
+  - Implemented safe two-pass URL tokenization: all hyperlinks are extracted into protected tokens (`@@@WAURLTOKEN...@@@`) prior to markdown parsing and restored cleanly as clickable links.
+
+### 10. ⚡ Node.js 20.x LTS Recommendation & Server Resource Optimization
+- **Standardized on Node.js 20.x LTS (Recommended)**:
+  - Official recommendation updated to **Node.js 20.x LTS** across all production environments.
+  - **Why Node.js 20 LTS?**
+    - **Ultra-Low Memory Footprint**: Uses significantly less RAM compared to Node.js 24, staying safely below CloudLinux LVE Physical Memory limits (PMEM) in shared/cloud hosting.
+    - **100% Baileys Compatibility**: Baileys v7 WebSocket engine and native crypto bindings are optimized and stress-tested specifically on Node 20 LTS.
+    - **Zero Silent Spindowns**: Avoids the experimental garbage collection and socket teardown crashes observed in newer bleeding-edge versions.
+  - Comprehensive documentation provided for configuring the cPanel Keep-Alive Cron Job to prevent Phusion Passenger idle timeouts.
 
 ---
 
@@ -229,17 +259,17 @@ Ensure your server or hosting environment meets the following specifications:
 | **PHP** | PHP 7.4 | PHP 8.1 or PHP 8.2 |
 | **PHP Extensions** | `pdo_mysql`, `curl`, `mbstring`, `fileinfo`, `json` | Enabled by default in PHP |
 | **Database** | MySQL 5.7+ or MariaDB 10.3+ | MySQL 8.0 / MariaDB 10.6+ |
-| **Node.js** | Node.js 20.x LTS | Node.js 22.x LTS (Recommended) |
+| **Node.js** | Node.js 18.x LTS | Node.js 20.x LTS (Recommended - Most Stable & Lightweight) |
 
 ---
 
 ## 🛠️ Node.js Installation Guide
 
-The WhatsApp Engine (`server.js`) requires Node.js. We strongly recommend **Node.js 22.x LTS** for optimum WebSocket stability with Baileys v7.
+The WhatsApp Engine (`server.js`) requires Node.js. We strongly recommend **Node.js 20.x LTS** for maximum server efficiency, minimal RAM footprint, and rock-solid WebSocket stability with Baileys v7. Bleeding-edge versions like Node.js 24 have significantly higher memory usage and stricter V8 garbage collection that can trigger CloudLinux OOM kills and idle spindowns on shared hosting.
 
 ### A. Windows (Localhost / XAMPP)
 1. Visit the official Node.js website: [https://nodejs.org](https://nodejs.org)
-2. Download the **LTS (Long Term Support)** installer `.msi` (e.g., `v22.x.x LTS`).
+2. Download the **LTS (Long Term Support)** installer `.msi` (select **v20.x.x LTS**).
 3. Run the installer:
    - Accept the license agreement.
    - Keep default settings and ensure **Add to PATH** is checked.
@@ -259,13 +289,13 @@ Run the following commands via SSH:
 # 1. Update package list & install prerequisites
 sudo apt update && sudo apt install -y curl build-essential
 
-# 2. Add NodeSource Node.js 22.x LTS repository
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+# 2. Add NodeSource Node.js 20.x LTS repository
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 
 # 3. Install Node.js
 sudo apt install -y nodejs
 
-# 4. Verify installation
+# 4. Verify installation (should return v20.x)
 node -v
 npm -v
 
@@ -285,13 +315,22 @@ pm2 startup
 1. Log into your **cPanel** dashboard.
 2. Open **Setup Node.js App**.
 3. Click **Create Application**:
-   - **Node.js version**: Choose `22.x` (Recommended) or `20.x`.
+   - **Node.js version**: Choose **`20.x` LTS** (e.g., `20.18.x` or latest 20.x). Highly recommended over Node 24 for superior memory efficiency.
    - **Application mode**: `Production`.
-   - **Application root**: `server`.
+   - **Application root**: `server` (or `wagtw.yourdomain.com/server`).
    - **Application startup file**: `server.js`.
 4. Click **Create**.
 5. Click **Run NPM Install** to install dependencies.
-6. The app will automatically run via Phusion Passenger.
+6. Click **Restart**.
+7. ⚠️ **Essential Keep-Alive Cron Job (Prevents Engine from Sleeping)**:
+   In cPanel, Phusion Passenger automatically terminates idle Node.js applications after 5 minutes of zero HTTP traffic. Because WhatsApp operates via a background WebSocket rather than web requests, set up a cron job to keep it running 24/7:
+   - Go to cPanel > **Cron Jobs**.
+   - Schedule: **Every minute** (`* * * * *`) or every 2 minutes (`*/2 * * * *`).
+   - Command:
+     ```bash
+     curl -s -k https://wagtw.yourdomain.com/server/api/status > /dev/null 2>&1
+     ```
+   - Click **Add New Cron Job**.
 
 ---
 
@@ -385,6 +424,16 @@ WAGTW implements an advanced 7-layer defense system designed around Meta's autom
 **Cause**: `server/.env` is missing or MySQL credentials are misconfigured.  
 **Solution**:
 - Verify `server/.env`. On default XAMPP setups, set `DB_USER=root` and `DB_PASS=""` (empty string).
+
+### Q: WhatsApp Gateway stops/dies on cPanel unless I open the WAGTW web?
+**Cause**: cPanel's Phusion Passenger automatically puts idle Node.js applications to sleep after 5 minutes of no incoming web HTTP requests. When you visit the web dashboard, PHP pings Node.js and wakes it back up.  
+**Solution**:
+1. **Switch to Node.js 20.x LTS**: In cPanel *Setup Node.js App*, change from Node.js 24 to Node.js 20 LTS. Node 20 consumes significantly less RAM, preventing CloudLinux LVE memory limits (PMEM) from terminating the process.
+2. **Add a Keep-Alive Cron Job**: In cPanel > **Cron Jobs**, add a cron job running every 1–2 minutes:
+   ```bash
+   curl -s -k https://wagtw.yourdomain.com/server/api/status > /dev/null 2>&1
+   ```
+   This ensures Phusion Passenger keeps the Node.js daemon active 24/7.
 
 ---
 
